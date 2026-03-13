@@ -17,7 +17,7 @@ from src.auth import (
     decode_access_token,
 )
 from src.utils.logger import api_logger
-from src.routes import jobs, verify
+from src.routes import jobs, verify, escrow_submissions
 from sqlalchemy.orm import Session
 
 
@@ -112,6 +112,7 @@ app.add_middleware(
 # Include routers
 app.include_router(jobs.router)
 app.include_router(verify.router)
+app.include_router(escrow_submissions.router)
 
 
 @app.on_event("startup")
