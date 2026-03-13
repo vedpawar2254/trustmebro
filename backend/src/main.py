@@ -17,6 +17,8 @@ from src.auth import (
     decode_access_token,
 )
 from src.utils.logger import api_logger
+from src.routes import jobs, verify
+from sqlalchemy.orm import Session
 
 
 # Set up main logger
@@ -106,6 +108,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(jobs.router)
+app.include_router(verify.router)
 
 
 @app.on_event("startup")

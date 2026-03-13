@@ -1,10 +1,11 @@
 """SQLAlchemy database models."""
 from datetime import datetime
 from typing import Optional
+
 from sqlalchemy import (
-    Column, Integer, String, Text, Float, Boolean, DateTime, Enum, ForeignKey
+    Column, Integer, String, Text, Float, Boolean, DateTime, Enum, ForeignKey, JSON
 )
-from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
@@ -53,6 +54,19 @@ class EscrowStatus(str, Enum):
     REFUNDED = "refunded"
 
 
+class CriterionType(str, Enum):
+    """Criterion types."""
+    PRIMARY = "PRIMARY"
+    SECONDARY = "SECONDARY"
+
+
+class VerificationStatus(str, Enum):
+    """Verification status."""
+    PASS = "pass"
+    FAIL = "fail"
+    PARTIAL = "partial"
+
+
 class User(Base):
     """User model."""
     __tablename__ = "users"
@@ -96,7 +110,51 @@ class Job(Base):
     escrow = relationship("Escrow", back_populates="job", uselist=False)
     spec = relationship("JobSpec", back_populates="job", uselist=False)
     chat_channel = relationship("ChatChannel", back_populates="job", uselist=False)
-    change_requests = relationship("ChangeRequest", back_populates="job")
+    change_requests = relationship("ChangeRequest", back_populates="job", uselist=False)
+
+
+class MilestoneCriterion(Base):
+    """Milestone criterion model."""
+    __tablename__ = "milestone_criteria"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_spec_id = Column(Integer, ForeignKey("job_specs.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    criterion_type = Column(Enum(CriterionType), nullable=False)
+    verification_status = Column(Enum(VerificationStatus), default="pending", nullable=False)
+    is_verifiable = Column(Boolean, default=True, nullable=False)
+    is_vague = Column(Boolean, default=False, nullable=False)
+    vague_resolved = Column(Boolean, default=False, nullable=False)
+    weight = Column(Float, default=0.1, nullable=False)
+
+
+class RequiredAsset(Base):
+    """Required asset model."""
+    __tablename__ = "required_assets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_spec_id = Column(Integer, ForeignKey("job_specs.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    is_delivered = Column(Boolean, default=False, nullable=False)
+    delivered_at = Column(DateTime, default=None)
+
+
+class Milestone(Base):
+    """Milestone model."""
+    __tablename__ = "milestones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_spec_id = Column(Integer, ForeignKey("job_specs.id"), nullable=False, index=True)
+    order = Column(Integer, nullable=False)
+    title = Column(String(500), nullable=False)
+    deadline = Column(DateTime, nullable=False)
+
+    # Relationships
+    job_spec = relationship("JobSpec", back_populates="milestones")
+    criteria = relationship("MilestoneCriterion", back_populates="milestone")
+    submission_requirements = relationship("SubmissionRequirement", back_populates="milestone", uselist=False)
 
 
 class JobSpec(Base):
@@ -107,8 +165,8 @@ class JobSpec(Base):
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
     version = Column(Integer, default=1, nullable=False)
     is_locked = Column(Boolean, default=False, nullable=False)
-    milestones_json = Column(Text, nullable=False)
-    required_assets_json = Column(Text, nullable=False)
+    milestones_json = Column(JSON, nullable=False)
+    required_assets_json = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -128,16 +186,12 @@ class Bid(Base):
     status = Column(Enum(BidStatus), default=BidStatus.PENDING, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationships
-    job = relationship("Job", back_populates="bids")
-    freelancer = relationship("User", back_populates="bids")
-
 
 class Escrow(Base):
     """Escrow model."""
     __tablename__ = "escrows"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     currency = Column(String(10), default="USD")
@@ -146,9 +200,6 @@ class Escrow(Base):
     released_at = Column(DateTime, default=None)
     refunded_at = Column(DateTime, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    job = relationship("Job", back_populates="escrow")
 
 
 class Submission(Base):
@@ -161,19 +212,15 @@ class Submission(Base):
     freelancer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     submission_type = Column(String(50), nullable=False)
     github_link = Column(String(500), default=None)
-    file_urls = Column(Text, default=None)
+    file_urls = Column(JSON, default=None)
     text_content = Column(Text, default=None)
     source_document_url = Column(String(500), default=None)
     status = Column(String(50), default="pending", nullable=False, index=True)
-    verification_report_json = Column(Text, default=None)
+    verification_report_json = Column(JSON, default=None)
     resubmission_count = Column(Integer, default=0)
     resubmissions_remaining = Column(Integer, default=2)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Relationships
-    job = relationship("Job", back_populates="submissions")
-    freelancer = relationship("User", back_populates="submissions")
 
 
 class ChatChannel(Base):
@@ -186,9 +233,6 @@ class ChatChannel(Base):
     freelancer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    job = relationship("Job", back_populates="chat_channel")
 
 
 class ChangeRequest(Base):

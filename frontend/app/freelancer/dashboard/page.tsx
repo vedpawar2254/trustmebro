@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore, selectUserRole, selectUser, selectUserPFI } from '@/store/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
@@ -85,7 +86,7 @@ export default function FreelancerDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="p-4 border border-border rounded-lg flex justify-between items-center">
+            <Link href="/freelancer/projects/job_002" className="block p-4 border border-border rounded-lg flex justify-between items-center hover:shadow-md transition-shadow">
               <div>
                 <div className="font-semibold text-foreground mb-1">React E-commerce Platform</div>
                 <div className="text-sm text-muted-foreground">Milestone 2: Core Features</div>
@@ -96,7 +97,7 @@ export default function FreelancerDashboard() {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Score: 72</div>
               </div>
-            </div>
+            </Link>
 
             <div className="p-4 border border-border rounded-lg flex justify-between items-center">
               <div>
@@ -110,19 +111,6 @@ export default function FreelancerDashboard() {
                 <div className="text-xs text-muted-foreground mt-1">Due in 3 days</div>
               </div>
             </div>
-
-            <div className="p-4 border border-border rounded-lg flex justify-between items-center">
-              <div>
-                <div className="font-semibold text-foreground mb-1">Data Entry Project</div>
-                <div className="text-sm text-muted-foreground">Milestone 3: Final Review</div>
-              </div>
-              <div className="text-right">
-                <div className="px-3 py-1 bg-success/20 text-success text-xs font-semibold rounded-full inline-block">
-                  🟢 Active
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">Due in 5 days</div>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -130,34 +118,53 @@ export default function FreelancerDashboard() {
       {/* Available Jobs */}
       <Card>
         <CardHeader>
-          <CardTitle>Available Jobs</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Available Jobs</CardTitle>
+            <Link href="/freelancer/jobs" className="text-sm text-primary hover:underline">Browse all →</Link>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="p-4 border border-border rounded-lg flex justify-between items-center hover:shadow-md transition-shadow cursor-pointer">
+            <Link href="/freelancer/jobs/job_005" className="block p-4 border border-border rounded-lg flex justify-between items-center hover:shadow-md transition-shadow cursor-pointer">
               <div>
                 <div className="font-semibold text-foreground mb-1">Backend API Development</div>
                 <div className="text-sm text-muted-foreground">[Software] Integrations</div>
                 <div className="text-xs text-muted-foreground mt-1">Employer PFI: 85</div>
               </div>
               <div className="text-right">
-                <div className="text-lg font-bold text-primary">$800 - $1,200</div>
+                <div className="text-lg font-bold text-primary">$1,500 - $2,500</div>
               </div>
-            </div>
+            </Link>
 
-            <div className="p-4 border border-border rounded-lg flex justify-between items-center hover:shadow-md transition-shadow cursor-pointer">
+            <Link href="/freelancer/jobs/job_003" className="block p-4 border border-border rounded-lg flex justify-between items-center hover:shadow-md transition-shadow cursor-pointer">
               <div>
-                <div className="font-semibold text-foreground mb-1">Blog Series (5 posts)</div>
-                <div className="text-sm text-muted-foreground">[Copywriting] Blog Posts</div>
-                <div className="text-xs text-muted-foreground mt-1">Employer PFI: 88</div>
+                <div className="font-semibold text-foreground mb-1">Customer Database Digitization</div>
+                <div className="text-sm text-muted-foreground">[Data Entry] Form Digitization</div>
+                <div className="text-xs text-muted-foreground mt-1">Employer PFI: 85</div>
               </div>
               <div className="text-right">
-                <div className="text-lg font-bold text-primary">$500</div>
+                <div className="text-lg font-bold text-primary">$200 - $350</div>
               </div>
-            </div>
+            </Link>
           </div>
         </CardContent>
       </Card>
+
+      {/* Quick links */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/freelancer/jobs" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
+          <div className="text-2xl mb-1">🔍</div>
+          <div className="font-semibold text-foreground text-sm">Browse Jobs</div>
+        </Link>
+        <Link href="/freelancer/projects" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
+          <div className="text-2xl mb-1">📁</div>
+          <div className="font-semibold text-foreground text-sm">My Projects</div>
+        </Link>
+        <Link href="/projects/job_002/chat" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
+          <div className="text-2xl mb-1">💬</div>
+          <div className="font-semibold text-foreground text-sm">Open Chat</div>
+        </Link>
+      </div>
     </div>
   );
 }

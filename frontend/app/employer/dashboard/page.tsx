@@ -2,8 +2,10 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore, selectUserRole, selectUser } from '@/store/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export default function EmployerDashboard() {
   const router = useRouter();
@@ -22,9 +24,14 @@ export default function EmployerDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
-      <h1 className="text-3xl font-bold text-foreground mb-8">
-        Welcome back, {user.name}!
-      </h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold text-foreground">
+          Welcome back, {user.name}!
+        </h1>
+        <Link href="/employer/post-job">
+          <Button variant="primary">+ Post New Job</Button>
+        </Link>
+      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -77,9 +84,9 @@ export default function EmployerDashboard() {
               <div className="text-sm text-muted-foreground mb-2">React E-commerce Platform</div>
               <div className="text-xs text-muted-foreground">2 hours ago</div>
               <div className="mt-2">
-                <button className="text-primary text-sm font-semibold hover:underline">
+                <Link href="/projects/job_001/verification/sub_hold" className="text-primary text-sm font-semibold hover:underline">
                   View Verification Report
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -88,9 +95,9 @@ export default function EmployerDashboard() {
               <div className="text-sm text-muted-foreground mb-2">Mobile App Development</div>
               <div className="text-xs text-muted-foreground">5 hours ago</div>
               <div className="mt-2">
-                <button className="text-primary text-sm font-semibold hover:underline">
+                <Link href="/employer/jobs/job_001" className="text-primary text-sm font-semibold hover:underline">
                   View Bid
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -99,14 +106,30 @@ export default function EmployerDashboard() {
               <div className="text-sm text-muted-foreground mb-2">Copywriting Package</div>
               <div className="text-xs text-muted-foreground">1 day ago</div>
               <div className="mt-2">
-                <button className="text-primary text-sm font-semibold hover:underline">
+                <Link href="/projects/job_002/verification/sub_pass" className="text-primary text-sm font-semibold hover:underline">
                   View Report
-                </button>
+                </Link>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Quick links */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/employer/jobs" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
+          <div className="text-2xl mb-1">📋</div>
+          <div className="font-semibold text-foreground text-sm">My Jobs</div>
+        </Link>
+        <Link href="/employer/post-job" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
+          <div className="text-2xl mb-1">✨</div>
+          <div className="font-semibold text-foreground text-sm">Post a Job</div>
+        </Link>
+        <Link href="/projects/job_002/chat" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
+          <div className="text-2xl mb-1">💬</div>
+          <div className="font-semibold text-foreground text-sm">Open Chat</div>
+        </Link>
+      </div>
     </div>
   );
 }

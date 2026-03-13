@@ -30,6 +30,9 @@ class Settings:
     port: int = int(os.getenv("PORT", "3001"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # AI Engine Configuration
+    ai_engine_url: str = os.getenv("AI_ENGINE_URL", "http://localhost:3002")
+
     # Project Configuration
     base_dir: Path = Path(__file__).parent.parent
     src_dir: Path = Path(__file__).parent

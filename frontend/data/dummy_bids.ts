@@ -1,4 +1,4 @@
-import type { Bid } from '@/shared/types'
+import type { Bid } from '@/types'
 
 export const DUMMY_BIDS: Bid[] = [
   {

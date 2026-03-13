@@ -1,4 +1,4 @@
-import type { User } from '@/shared/types'
+import type { User } from '@/types'
 
 export const DUMMY_EMPLOYER: User = {
   id: 'user_emp_1',

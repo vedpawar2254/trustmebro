@@ -1,4 +1,4 @@
-import type { JobSpec } from '@/shared/types'
+import type { JobSpec } from '@/types'
 
 export const DUMMY_SPEC_SOFTWARE: JobSpec = {
   spec_id: 'spec_001',
