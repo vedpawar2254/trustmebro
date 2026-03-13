@@ -11,10 +11,11 @@ load_dotenv()
 class Settings:
     """Application settings loaded from environment variables."""
 
-    # OpenAI Configuration
-    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4")
-    openai_max_tokens: int = int(os.getenv("OPENAI_MAX_TOKENS", "4096"))
+    # OpenRouter API Configuration (GPT-4o/4o-mini)
+    openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    openrouter_max_tokens: int = int(os.getenv("OPENROUTER_MAX_TOKENS", "4096"))
+    openrouter_api_url: str = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1")
 
     # GitHub Configuration
     github_token: str = os.getenv("GITHUB_TOKEN", "")
@@ -39,8 +40,8 @@ class Settings:
 
     def validate(self) -> None:
         """Validate required settings."""
-        if not self.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is required")
+        if not self.openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY is required")
         if not self.github_token:
             raise ValueError("GITHUB_TOKEN is required")
 

@@ -1,22 +1,27 @@
-"""OpenAI client wrapper with error handling."""
+"""OpenRouter client wrapper for GPT-4o/4o-mini."""
 from typing import Optional, Dict, Any
 
-import openai
-from openai import OpenAI
+from openai import OpenAI, AuthenticationError, RateLimitError, APIError
 
 from src.config import settings
 from src.utils.logger import verification_logger
 
 
-class AIClient:
-    """Wrapper for OpenAI API with error handling."""
+class OpenRouterClient:
+    """Wrapper for OpenRouter API (OpenAI-compatible) with error handling."""
 
     def __init__(self):
-        """Initialize OpenAI client."""
-        self.client = OpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
-        self.max_tokens = settings.openai_max_tokens
-        verification_logger.info(f"OpenAI client initialized with model: {self.model}")
+        """Initialize OpenRouter client."""
+        self.client = OpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_api_url,
+            default_headers={
+                "HTTP-Referer": "https://trustmebro.com",
+            }
+        )
+        self.model = settings.openrouter_model
+        self.max_tokens = settings.openrouter_max_tokens
+        verification_logger.info(f"OpenRouter client initialized with model: {self.model}")
 
     async def generate_completion(
         self,
@@ -25,7 +30,7 @@ class AIClient:
         temperature: float = 0.3,
         response_format: Optional[Dict[str, str]] = None,
     ) -> str:
-        """Generate a completion using OpenAI chat API.
+        """Generate a completion using OpenRouter chat API.
 
         Args:
             prompt: User prompt
@@ -55,26 +60,26 @@ class AIClient:
             if response_format:
                 kwargs["response_format"] = response_format
 
-            verification_logger.debug(f"Sending request to OpenAI: {prompt[:100]}...")
+            verification_logger.debug(f"Sending request to OpenRouter: {prompt[:100]}...")
 
             response = self.client.chat.completions.create(**kwargs)
             content = response.choices[0].message.content
 
-            verification_logger.debug(f"Received response from OpenAI: {content[:100]}...")
+            verification_logger.debug(f"Received response from OpenRouter: {content[:100]}...")
             return content
 
-        except openai.AuthenticationError as e:
-            verification_logger.error(f"OpenAI authentication error: {e}")
-            raise ValueError("Invalid OpenAI API key") from e
-        except openai.RateLimitError as e:
-            verification_logger.warning(f"OpenAI rate limit: {e}")
-            raise Exception("OpenAI API rate limit exceeded") from e
-        except openai.APIError as e:
-            verification_logger.error(f"OpenAI API error: {e}")
-            raise Exception(f"OpenAI API error: {str(e)}") from e
+        except AuthenticationError as e:
+            verification_logger.error(f"OpenRouter authentication error: {e}")
+            raise ValueError("Invalid OpenRouter API key") from e
+        except RateLimitError as e:
+            verification_logger.warning(f"OpenRouter rate limit: {e}")
+            raise Exception("OpenRouter API rate limit exceeded") from e
+        except APIError as e:
+            verification_logger.error(f"OpenRouter API error: {e}")
+            raise Exception(f"OpenRouter API error: {str(e)}") from e
         except Exception as e:
-            verification_logger.error(f"Unexpected error calling OpenAI: {e}")
-            raise Exception(f"Failed to call OpenAI: {str(e)}") from e
+            verification_logger.error(f"Unexpected error calling OpenRouter: {e}")
+            raise Exception(f"Failed to call OpenRouter: {str(e)}") from e
 
     async def generate_json_completion(
         self,
@@ -82,7 +87,7 @@ class AIClient:
         system_prompt: Optional[str] = None,
         temperature: float = 0.3,
     ) -> Dict[str, Any]:
-        """Generate a JSON completion using OpenAI chat API.
+        """Generate a JSON completion using OpenRouter chat API.
 
         Args:
             prompt: User prompt
@@ -107,9 +112,9 @@ class AIClient:
         try:
             return json.loads(response_text)
         except json.JSONDecodeError as e:
-            verification_logger.error(f"Failed to parse OpenAI JSON response: {response_text}")
+            verification_logger.error(f"Failed to parse OpenRouter JSON response: {response_text}")
             raise Exception(f"Invalid JSON response: {str(e)}") from e
 
 
 # Singleton instance
-ai_client = AIClient()
+openrouter_client = OpenRouterClient()

@@ -5,7 +5,7 @@ AI-powered verification engine for the trustmebro freelance platform.
 ## Features
 
 - **Modular Verification Lanes**: Separate lanes for different gig types (Software, Copywriting, Data Entry, Translation)
-- **OpenAI Integration**: LLM-powered feature verification and analysis
+- **OpenRouter Integration**: GPT-4o/4o-mini LLM for feature verification and analysis
 - **GitHub API**: Repository analysis and structure verification
 - **Plagiarism Detection**: Placeholder for plagiarism API integration
 - **Scoring System**: Automatic score calculation and payment decision
@@ -33,7 +33,8 @@ pip install -r requirements.txt
 2. Fill in your API keys:
 
 ```env
-OPENAI_API_KEY=your_openai_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=openai/gpt-4o-mini
 GITHUB_TOKEN=your_github_token_here
 ```
 

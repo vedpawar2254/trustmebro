@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 
 from src.lanes.base import VerificationLane, Criterion, PFISignal, VerificationReport
 from src.utils.github_client import github_client
-from src.utils.openai_client import ai_client
+from src.utils.openai_client import openrouter_client
 from src.utils.logger import verification_logger
 
 
