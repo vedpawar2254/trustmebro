@@ -201,6 +201,92 @@ async def get_job_by_id(
         )
 
 
+@router.get("/{job_id}/bids", response_model=dict)
+async def get_job_bids(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Get all bids for a job (employer only).
+
+    Args:
+        job_id: Job ID
+        request: FastAPI request
+        db: Database session
+
+    Returns:
+        List of bids
+
+    Raises:
+        HTTPException: Not authenticated
+        HTTPException: Not authorized
+        HTTPException: Job not found
+        Server error
+    """
+    current_user = get_current_user(request)
+
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+
+    try:
+        api_logger.info(f"Fetching bids for job {job_id}")
+
+        # Check if job exists
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            api_logger.warning(f"Job not found: {job_id}")
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found"
+            )
+
+        # Verify user is employer who owns the job
+        if current_user.get("role") != "employer" or job.employer_id != current_user["user_id"]:
+            api_logger.warning(f"Unauthorized access to job bids: user {current_user['user_id']}")
+            raise HTTPException(
+                status_code=403,
+                detail="Only the job owner can view bids"
+            )
+
+        # Get bids
+        bids = db.query(Bid).filter(Bid.job_id == job_id).all()
+
+        bid_list = []
+        for bid in bids:
+            bid_dict = {
+                "bid_id": bid.id,
+                "job_id": job_id,
+                "freelancer_id": bid.freelancer_id,
+                "freelancer_name": get_freelancer_name(bid.freelancer_id, db),
+                "freelancer_pfi": get_freelancer_pfi(bid.freelancer_id, db),
+                "cover_letter": bid.cover_letter,
+                "proposed_deadline": bid.proposed_deadline.isoformat() if bid.proposed_deadline else None,
+                "proposed_budget": bid.proposed_budget,
+                "status": bid.status.value if bid.status else None,
+                "created_at": bid.created_at.isoformat(),
+            }
+            bid_list.append(bid_dict)
+
+        api_logger.info(f"Returning {len(bid_list)} bids for job {job_id}")
+
+        return {
+            "success": True,
+            "data": bid_list
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Unexpected error fetching bids: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Server error"
+        )
+
+
 @router.post("/{job_id}/bids", response_model=dict)
 async def create_bid(
     job_id: int,
@@ -237,6 +323,217 @@ async def create_bid(
 
     try:
         api_logger.info(f"Creating bid for job {job_id} by user {current_user['user_id']}")
+
+        # Verify user is freelancer
+        if current_user.get("role") != "freelancer":
+            api_logger.warning(f"Only freelancers can place bids: {current_user['user_id']}")
+            raise HTTPException(
+                status_code=403,
+                detail="Only freelancers can place bids"
+            )
+
+        # Check if job exists
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            api_logger.warning(f"Job not found: {job_id}")
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found"
+            )
+
+        # Check if user already bid on this job
+        existing_bid = db.query(Bid).filter(
+            Bid.job_id == job_id,
+            Bid.freelancer_id == current_user["user_id"]
+        ).first()
+
+        if existing_bid:
+            api_logger.warning(f"User already bid on job {job_id}")
+            raise HTTPException(
+                status_code=409,
+                detail="You already have a bid on this job"
+            )
+
+        # Validate bid data
+        cover_letter = bid_data.get("cover_letter", "")
+        proposed_budget = bid_data.get("proposed_budget")
+        proposed_deadline = bid_data.get("proposed_timeline")
+
+        if len(cover_letter) < 50:
+            api_logger.warning(f"Bid too short: {len(cover_letter)} characters")
+            raise HTTPException(
+                status_code=400,
+                detail="Cover letter must be at least 50 characters"
+            )
+
+        if len(cover_letter) > 5000:
+            api_logger.warning(f"Bid too long: {len(cover_letter)} characters")
+            raise HTTPException(
+                status_code=400,
+                detail="Cover letter must be 5000 characters or less"
+            )
+
+        # Create bid
+        new_bid = Bid(
+            job_id=job_id,
+            freelancer_id=current_user["user_id"],
+            cover_letter=cover_letter,
+            proposed_deadline=proposed_deadline,
+            proposed_budget=proposed_budget,
+            status=BidStatus.PENDING
+        )
+
+        db.add(new_bid)
+        db.commit()
+        db.refresh(new_bid)
+
+        api_logger.info(f"Created bid {new_bid.id} for job {job_id} by user {current_user['user_id']}")
+
+        return {
+            "success": True,
+            "data": {
+                "bid_id": new_bid.id,
+                "job_id": job_id,
+                "freelancer_id": new_bid.freelancer_id,
+                "freelancer_name": get_freelancer_name(new_bid.freelancer_id, db),
+                "freelancer_pfi": get_freelancer_pfi(new_bid.freelancer_id, db),
+                "cover_letter": new_bid.cover_letter,
+                "proposed_deadline": new_bid.proposed_deadline.isoformat() if new_bid.proposed_deadline else None,
+                "proposed_budget": new_bid.proposed_budget,
+                "status": new_bid.status.value,
+                "created_at": new_bid.created_at.isoformat(),
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Unexpected error creating bid: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Server error"
+        )
+
+
+@router.post("/{job_id}/assign", response_model=dict)
+async def assign_freelancer(
+    job_id: int,
+    assignment_data: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Assign a freelancer to a job (employer only).
+
+    Args:
+        job_id: Job ID
+        assignment_data: Assignment data (bid_id, freelancer_id)
+        request: FastAPI request
+        db: Database session
+
+    Returns:
+        Updated job with assigned freelancer
+
+    Raises:
+        HTTPException: Not authenticated
+        HTTPException: Not authorized
+        HTTPException: Job not found
+        HTTPException: Bid not found
+        Server error
+    """
+    current_user = get_current_user(request)
+
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+
+    try:
+        api_logger.info(f"Assigning freelancer to job {job_id}")
+
+        # Verify user is employer
+        if current_user.get("role") != "employer":
+            api_logger.warning(f"Only employers can assign freelancers: {current_user['user_id']}")
+            raise HTTPException(
+                status_code=403,
+                detail="Only employers can assign freelancers"
+            )
+
+        # Check if job exists and belongs to user
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            api_logger.warning(f"Job not found: {job_id}")
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found"
+            )
+
+        if job.employer_id != current_user["user_id"]:
+            api_logger.warning(f"Unauthorized assignment attempt: user {current_user['user_id']} not job owner")
+            raise HTTPException(
+                status_code=403,
+                detail="You are not the owner of this job"
+            )
+
+        # Get assignment data
+        bid_id = assignment_data.get("bid_id")
+        freelancer_id = assignment_data.get("freelancer_id")
+
+        if not bid_id or not freelancer_id:
+            raise HTTPException(
+                status_code=400,
+                detail="bid_id and freelancer_id are required"
+            )
+
+        # Verify bid exists and belongs to this job
+        bid = db.query(Bid).filter(
+            Bid.id == bid_id,
+            Bid.job_id == job_id,
+            Bid.freelancer_id == freelancer_id
+        ).first()
+
+        if not bid:
+            api_logger.warning(f"Bid not found: {bid_id} for job {job_id}")
+            raise HTTPException(
+                status_code=404,
+                detail="Bid not found"
+            )
+
+        # Update job status to ASSIGNED
+        job.status = JobStatus.ASSIGNED
+        db.commit()
+
+        # Update bid status to ACCEPTED
+        bid.status = BidStatus.ACCEPTED
+        db.commit()
+
+        # Reject all other bids for this job
+        db.query(Bid).filter(
+            Bid.job_id == job_id,
+            Bid.id != bid_id
+        ).update({"status": BidStatus.REJECTED})
+        db.commit()
+
+        api_logger.info(f"Job {job_id} assigned to freelancer {freelancer_id}")
+
+        return {
+            "success": True,
+            "data": {
+                "job_id": job_id,
+                "status": job.status.value,
+                "assigned_freelancer_id": freelancer_id,
+                "assigned_at": job.updated_at.isoformat() if hasattr(job, 'updated_at') else None,
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Unexpected error assigning freelancer: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Server error"
+        )
 
         # Verify user is freelancer
         if current_user.get("role") != "freelancer":
