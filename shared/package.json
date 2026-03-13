@@ -1,0 +1,22 @@
+{
+  "name": "@trustmebro/shared-types",
+  "version": "0.1.0",
+  "description": "Shared TypeScript types for trustmebro project",
+  "main": "types/index.ts",
+  "types": "types/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "typescript",
+    "types",
+    "shared"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
