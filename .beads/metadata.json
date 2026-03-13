@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "trustmebro",
+  "project_id": "86dcce41-f456-4990-8099-378730c27f2a"
+}
