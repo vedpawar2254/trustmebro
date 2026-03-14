@@ -1,34 +1,270 @@
-# trustmebro
+# TrustMeBro
 
-**AI-mediated gig platform with escrow and automated verification**
+**An AI-mediated freelance marketplace with escrow, automated verification, and real-time scope creep detection.**
 
----
-
-## Quick Start
-
-This is an AI-powered freelance marketplace that uses automated verification and AI-mediated chat to build trust between employers and freelancers.
-
-### Core Features
-
-- **AI Spec Generation**: Turn vague job descriptions into structured, verifiable specs
-- **4 Gig Types**: Software, Copywriting, Data Entry, Translation (with 24 subtypes)
-- **Automated Verification**: AI evaluates submissions across 4 verification lanes
-- **AI-Mediated Chat**: Real-time AI catches scope creep and clarifies specs
-- **Escrow & Payments**: Mock escrow with automatic release based on verification scores
-- **PFI Scores**: Trust metrics for both employers and freelancers
+TrustMeBro reimagines how freelance work gets done. Instead of relying on subjective reviews and trust-me handshakes, every job goes through AI-generated specs, AI-verified submissions, and AI-mediated chat — with payments locked in escrow and released automatically when work passes verification.
 
 ---
 
-## Documentation
+## Why This Exists
 
-All project documentation lives in the `/docs` folder:
+Freelance platforms are broken in predictable ways:
 
-| Document | Description |
-|----------|-------------|
-| [`PRD.md`](PRD.md) | Complete Product Requirements Document with feature list and flows |
-| [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) | Detailed build plan with 18 phases, dependencies, and acceptance criteria |
-| [`docs/UI_DESIGN.md`](docs/UI_DESIGN.md) | Comprehensive UI design specification with color palette, typography, and screen designs |
-| [`docs/USER_STORIES.md`](docs/USER_STORIES.md) | Detailed user stories for Phases 1-3 and 5-6 with dummy data and code examples |
+- **Vague job posts** → disputes over what was actually agreed upon
+- **Scope creep in chat** → "can you also just quickly..." spirals
+- **Subjective quality reviews** → employer says it's bad, freelancer says it's done
+- **Payment games** → ghosting, delayed releases, refund abuse
+
+TrustMeBro solves each of these with a system-level intervention, not a policy page.
+
+---
+
+## What Makes This Different
+
+### 1. AI Spec Generation
+Employers write a plain-English job description. The AI transforms it into a structured, verifiable specification with milestones, weighted requirements (primary 60%, secondary 30%, tertiary 10%), deliverables, and required assets. No more ambiguity about what "done" means.
+
+### 2. Two-Party Spec Lock
+Both employer and freelancer must independently confirm the spec before work begins. Once locked, the spec becomes the single source of truth. Neither party can unilaterally change it — they must go through the formal Change Request system.
+
+### 3. AI-Mediated Chat (Bro)
+Every project chat has an AI mediator called **Bro** that monitors conversations in real-time:
+- **Scope creep detection** — catches "can you also add..." and prompts a formal Change Request instead
+- **Budget/deadline change detection** — flags informal negotiations and routes them to the proper workflow
+- **Process questions** — answers questions about escrow, verification, milestones, and payments
+- **Escalation warnings** — intervenes before disagreements become disputes
+
+Chat cannot override the spec. A banner makes this explicit.
+
+### 4. AI-Powered Submission Verification
+Freelancers submit work per milestone. The AI evaluates submissions against the locked spec criteria and returns a score (0-100):
+- **≥90%** → Verified. Payment auto-releases from escrow.
+- **50-89%** → Partial. Needs revision or manual employer approval.
+- **<50%** → Failed. Must resubmit (max 2 attempts per milestone).
+
+Each verification produces a detailed report with per-criterion breakdowns, a verdict, and actionable suggestions.
+
+### 5. Escrow with Milestone-Based Auto-Release
+Employers fund escrow before work begins (10% platform fee). Payments are split across milestones and release automatically when AI verification passes. No manual release needed for clean submissions. Refunds are only possible if no work has been submitted.
+
+### 6. PFI — Platform Fidelity Index
+Every user has a reputation score (0-100) that reflects their behavior on the platform:
+- **Bonuses**: verified submissions (+0.5), job completion (+1.0), manual approvals (+0.3)
+- **Penalties**: failed submissions (-2.0), inactivity (-5 to -15), dispute losses (-10)
+- **Enforcement**: PFI below 20 blocks bidding/submissions. Below 10 suspends the account.
+
+PFI replaces subjective star ratings with a behavioral trust metric.
+
+### 7. Ghost Protocol
+Monitors user activity on active jobs. If someone goes silent:
+- **24h** → friendly reminder via Bro
+- **48h** → warning with PFI penalty preview
+- **72h** → -5 PFI penalty applied
+- **7 days** → account flagged, -15 PFI, other party can take action
+
+### 8. Change Request System
+After spec lock, changes go through a formal request system:
+- Types: scope, budget, deadline
+- Employers get 3 free requests, freelancers get 2
+- Additional requests cost $25 each
+- The other party must accept or reject
+- Accepted changes auto-update the spec
+
+### 9. Dispute Resolution
+When things go wrong, either party can open a dispute:
+- Types: quality, incomplete, non-delivery, scope disagreement
+- Both parties submit statements and evidence
+- AI analyzes and recommends resolution
+- Outcomes: full refund, full release, or percentage-based split
+- PFI penalties applied to the losing party
+
+### 10. Auto-Approval Protection
+If an employer doesn't review a submission within 48 hours, it auto-approves with a 90% score. This prevents employers from stalling payments by ignoring submissions.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                        Frontend                         │
+│              Next.js 16 · React 19 · TypeScript         │
+│           Tailwind CSS 4 · Radix UI · Zustand           │
+│                                                         │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────────────┐│
+│  │ Employer  │  │Freelancer│  │   Shared Pages         ││
+│  │ Dashboard │  │Dashboard │  │ Chat · Spec · Verify   ││
+│  │ Post Job  │  │Browse    │  │ Payments · Settings    ││
+│  │ Manage    │  │Bid · Work│  │                        ││
+│  └──────────┘  └──────────┘  └────────────────────────┘│
+│                       │                                  │
+│              Axios API Client + Auth Interceptors        │
+└───────────────────────┬─────────────────────────────────┘
+                        │ REST API
+┌───────────────────────┴─────────────────────────────────┐
+│                        Backend                           │
+│             FastAPI · Python · SQLAlchemy                 │
+│               JWT Auth · Bcrypt · SMTP                   │
+│                                                          │
+│  Routes:                                                 │
+│  ├── /api/auth      → Register, Login, Email Verify      │
+│  ├── /api/jobs      → CRUD, Specs, Bids, Assignment      │
+│  ├── /api/jobs/escrow      → Fund, Release, Refund       │
+│  ├── /api/jobs/submissions → Submit, Verify, Resubmit    │
+│  ├── /api/jobs/chat        → Messages, Bro AI Mediator   │
+│  ├── /api/jobs/disputes    → File, Evidence, Resolve     │
+│  ├── /api/jobs/change-requests → Create, Respond         │
+│  ├── /api/dashboard → Stats, Activity, PFI History       │
+│  ├── /api/scheduler → Ghost Check, Auto-Approve, Remind  │
+│  └── /api/users     → Notification Preferences           │
+│                                                          │
+│  Services:                                               │
+│  ├── Bro Mediator   → Scope creep & chat analysis        │
+│  ├── Ghost Protocol → Inactivity monitoring & penalties  │
+│  ├── Email Service  → 10+ transactional email templates  │
+│  └── Enforcement    → PFI checks, account suspension     │
+│                        │                                 │
+│                   SQLite / PostgreSQL                     │
+└───────────────────────┬─────────────────────────────────┘
+                        │ HTTP
+┌───────────────────────┴─────────────────────────────────┐
+│                   AI Engine (External)                    │
+│          Spec Generation · Submission Verification       │
+│                Chat Analysis · Scoring                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Data Model
+
+The core entities and their relationships:
+
+- **User** → has role (employer/freelancer), PFI score, notification preferences
+- **Job** → lifecycle: DRAFT → PUBLISHED → ASSIGNED → ESCROW_FUNDED → IN_PROGRESS → COMPLETED/DISPUTED
+- **JobSpec** → milestones, weighted requirements, deliverables, verification policy, two-party lock
+- **Bid** → freelancer proposal with budget, timeline, cover letter
+- **Escrow** → holds funds, tracks platform fee (10%), milestone-based releases
+- **Submission** → work delivery per milestone, verification score, resubmission tracking (max 2)
+- **ChatChannel** → per-job messaging between employer, freelancer, and Bro AI
+- **ChangeRequest** → formal spec modifications after lock (limited free requests)
+- **Dispute** → statements, evidence, AI recommendation, resolution with fund allocation
+- **GhostEvent** → progressive inactivity warnings and PFI penalties
+
+### Frontend Architecture
+
+- **State**: Zustand store with localStorage persistence for auth
+- **API Layer**: Typed Axios client with automatic token injection and 401 redirect
+- **Services**: 11 service modules covering 40+ API endpoints
+- **UI**: Custom dark purple theme, component library built on Radix UI primitives
+- **Rendering**: Next.js App Router with role-based route groups (`/employer/*`, `/freelancer/*`)
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI, Zustand |
+| Backend | FastAPI, Python, SQLAlchemy, JWT, Bcrypt |
+| Database | SQLite (dev) / PostgreSQL (prod) |
+| Email | SMTP (Gmail compatible, dev mode logs to console) |
+| AI | External AI engine for spec generation, verification, chat analysis |
+| Icons | Lucide React |
+| Maps | d3-geo, react-simple-maps |
+| Deployment | Vercel (frontend) |
+
+---
+
+## Job Lifecycle
+
+```
+Employer creates job (DRAFT)
+        │
+        ▼
+AI generates structured spec with milestones
+        │
+        ▼
+Employer publishes job (PUBLISHED)
+        │
+        ▼
+Freelancers browse, filter, and bid
+        │
+        ▼
+Employer accepts bid → job ASSIGNED
+        │
+        ▼
+Both parties lock spec (two-party confirmation)
+        │
+        ▼
+Employer funds escrow → ESCROW_FUNDED (10% platform fee)
+        │
+        ▼
+Chat opens with Bro AI mediator
+        │
+        ▼
+Freelancer submits work per milestone (IN_PROGRESS)
+        │
+        ▼
+AI verifies submission against spec → score 0-100
+        │
+   ┌────┴─────────────────┐
+   │                      │
+≥90%: VERIFIED        <90%: PARTIAL/FAILED
+Payment auto-releases  Revise or employer approves
+   │                      │
+   └────┬─────────────────┘
+        │
+        ▼
+All milestones verified → COMPLETED
+Remaining escrow released, PFI bonuses applied
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- npm
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your config
+
+# Run the server
+uvicorn src.main:app --reload
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+
+# Run the dev server
+npm run dev
+```
+
+The frontend runs on `http://localhost:3000` and the backend on `http://localhost:8000`.
+
+---
+
+## Gig Types
+
+The platform supports 4 gig categories, each with specialized subtypes and verification criteria:
+
+| Type | Subtypes |
+|------|----------|
+| Software | Web Development, Mobile App, API/Backend, DevOps, Data Science, Automation |
+| Copywriting | Blog Posts, Technical Writing, Marketing Copy, Social Media, SEO Content, UX Writing |
+| Data Entry | Spreadsheet, Database, Form Processing, Transcription, Research, Categorization |
+| Translation | Document, Website, Technical, Legal, Creative, Subtitling |
 
 ---
 
@@ -36,257 +272,75 @@ All project documentation lives in the `/docs` folder:
 
 ```
 trustmebro/
-├── PRD.md                      # Product Requirements Document
-├── README.md                   # This file
-├── docs/                       # All documentation
-│   ├── BUILD_PLAN.md          # Build plan (18 phases)
-│   ├── UI_DESIGN.md           # UI design specs
-│   └── USER_STORIES.md        # User stories with dummy data
-├── frontend/                  # Next.js frontend (to be created)
-├── backend/                   # Node/Express backend (to be created)
-├── ai-engine/                 # Python AI verification engine (to be created)
-└── shared/                    # Shared TypeScript types (to be created)
+├── backend/
+│   └── src/
+│       ├── main.py              # FastAPI app, CORS, error handlers
+│       ├── models.py            # SQLAlchemy models (10+ tables)
+│       ├── schemas.py           # Pydantic request/response schemas
+│       ├── config.py            # Environment configuration
+│       ├── database.py          # DB connection and session
+│       ├── auth.py              # JWT token utilities
+│       ├── routes/
+│       │   ├── auth.py          # Registration, login, email verify
+│       │   ├── jobs.py          # Jobs, specs, bids, assignment
+│       │   ├── escrow_submissions.py  # Escrow + submission + verification
+│       │   ├── chat.py          # Chat with Bro AI mediator
+│       │   ├── disputes.py      # Dispute filing and resolution
+│       │   ├── change_requests.py    # Formal change management
+│       │   ├── dashboard.py     # Role-specific stats and activity
+│       │   ├── payments.py      # Payment tracking per milestone
+│       │   ├── scheduler.py     # Ghost checks, auto-approve, reminders
+│       │   ├── uploads.py       # File upload/download
+│       │   └── users.py         # Notification preferences
+│       ├── services/
+│       │   ├── bro_mediator.py  # Chat analysis, scope creep detection
+│       │   ├── ghost_protocol.py # Inactivity monitoring
+│       │   └── email_service.py # Transactional emails
+│       └── utils/
+│           ├── enforcement.py   # PFI checks, account suspension
+│           ├── deadline.py      # Deadline tracking, grace periods
+│           └── notifications.py # Preference-aware notification routing
+├── frontend/
+│   ├── app/
+│   │   ├── page.tsx             # Landing page with canvas animation
+│   │   ├── login/               # Authentication
+│   │   ├── register/            # Role-based registration
+│   │   ├── employer/
+│   │   │   ├── dashboard/       # Stats, active jobs, pending bids
+│   │   │   ├── jobs/            # Job listing and detail pages
+│   │   │   └── post-job/        # Multi-step job creation with AI spec
+│   │   ├── freelancer/
+│   │   │   ├── dashboard/       # PFI score, earnings, projects
+│   │   │   ├── jobs/            # Browse and bid on jobs
+│   │   │   └── projects/        # Active projects and submissions
+│   │   ├── projects/[jobId]/
+│   │   │   ├── chat/            # Real-time chat with Bro AI
+│   │   │   ├── spec/            # Locked spec viewer
+│   │   │   └── verification/    # AI verification reports
+│   │   ├── payments/            # Transaction history
+│   │   └── settings/            # Profile, notifications, email verify
+│   ├── components/
+│   │   ├── ui/                  # Button, Card, Badge, Input, MeterRing
+│   │   ├── layout/              # Navbar, Footer
+│   │   ├── home/                # Hero with canvas particle animation
+│   │   ├── jobs/                # JobCard, Filters, MilestoneCard, SpecViewer
+│   │   ├── bids/                # BidCard, BidForm
+│   │   ├── projects/            # SubmissionForm, MilestoneStepper, EscrowWidget
+│   │   ├── chat/                # ChatBubble, AIInterceptBanner
+│   │   └── verification/        # ScoreRing, VerificationReport, CriterionBreakdown
+│   ├── lib/api/
+│   │   ├── client.ts            # Axios wrapper with auth interceptors
+│   │   └── services.ts          # 11 service modules, 40+ endpoints
+│   └── store/
+│       └── auth.ts              # Zustand auth store with persistence
+└── docs/
+    ├── BUILD_PLAN.md
+    ├── UI_DESIGN.md
+    └── USER_STORIES.md
 ```
-
----
-
-## Tech Stack (Planned)
-
-### Frontend
-- **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS
-- **Components**: shadcn/ui / Radix UI
-- **State Management**: Zustand
-- **HTTP Client**: Axios
-
-### Backend
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js
-- **Database**: PostgreSQL
-- **ORM**: Prisma
-- **Authentication**: JWT
-
-### AI Engine
-- **Runtime**: Python 3.11+
-- **LLM**: OpenAI GPT-4
-- **GitHub**: PyGitHub
-- **Plagiarism**: Plagiarism API (placeholder)
-
----
-
-## The Product Story
-
-### The Problem
-Traditional freelance platforms lack transparency and trust:
-- Vague job descriptions lead to disputes
-- Scope creep happens in private chats
-- Quality verification is subjective
-- Payment disputes are common and painful
-
-### The Solution
-trustmebro uses AI to solve these problems at every step:
-
-1. **Job Posting**: AI turns vague descriptions into structured, verifiable specs
-2. **Work Submission**: AI evaluates submissions objectively across multiple criteria
-3. **Chat Mediation**: AI catches scope creep in real-time, logs spec clarifications
-4. **Payment Release**: Automatic based on verification scores (≥90% = release)
-
-### The Demo Script
-
-Six wow moments that tell the story:
-
-1. **Spec Generation**: Watch AI transform vague text into structured spec
-2. **Chat Opens**: Employer funds escrow, spec locks, chat opens automatically
-3. **Clarification Interception**: Freelancer asks question → AI logs spec clarification
-4. **Scope Creep Caught**: Client tries to add feature → AI prompts Change Request
-5. **Real-Time Verification**: AI evaluates submission in seconds
-6. **Auto-Release**: Score ≥90% → payment releases automatically
-
----
-
-## Build Order (14-Day Sprint)
-
-### Days 1-2: Foundation (BLOCKER)
-- Schema agreement
-- Project setup
-- Authentication
-- Role-based views
-
-### Days 3-4: Core Features
-- Gig type system
-- Job posting
-- Spec generation
-- Job browsing
-
-### Days 5-7: Work & Verification
-- Freelancer selection
-- Spec lock & escrow
-- Work submission
-- AI verification engine
-- Verification report UI
-
-### Days 8-9: Chat & Trust
-- AI-mediated chat
-- Chat infrastructure
-- AI message detection
-
-### Days 10-11: Advanced Features
-- Revision loop
-- Change requests
-- Disputes
-- PFI scoring
-
-### Days 12-14: Polish
-- Asset delivery tracking
-- Counter-offers
-- Dashboards
-- Accessibility & responsiveness
-
-See [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) for detailed breakdown.
-
----
-
-## UI Design Principles
-
-- **Trust First**: Every UI decision reinforces transparency and authority
-- **Clean & Professional**: Forest green + warm cream palette (not generic blue/gray)
-- **Edge Case Ready**: Real tension, conflicts, and disputes are handled
-- **Information Hierarchy**: Scores, status, and PFI are always visible
-- **Accessible**: WCAG AA compliant with keyboard navigation
-
-See [`docs/UI_DESIGN.md`](docs/UI_DESIGN.md) for complete design system.
-
----
-
-## Getting Started (Development)
-
-### Prerequisites
-- Node.js 18+
-- Python 3.11+
-- PostgreSQL 14+
-- OpenAI API key
-
-### Setup (Coming Soon)
-
-```bash
-# Clone the repository
-git clone <repo-url>
-cd trustmebro
-
-# Install frontend dependencies
-cd frontend
-npm install
-
-# Install backend dependencies
-cd ../backend
-npm install
-
-# Install AI engine dependencies
-cd ../ai-engine
-poetry install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your API keys and database URL
-
-# Run migrations
-cd backend
-npx prisma migrate dev
-
-# Start development servers
-# Terminal 1: Frontend
-cd frontend
-npm run dev
-
-# Terminal 2: Backend
-cd backend
-npm run dev
-
-# Terminal 3: AI Engine
-cd ai-engine
-poetry run uvicorn src.main:app --reload
-```
-
----
-
-## Dummy Data
-
-Phase 4 job postings have been pre-created with dummy data for testing:
-
-- **12 Jobs** across all 4 gig types and multiple subtypes
-- **5 Sample Bids** with realistic proposals
-- **Complete Job Specs** with milestones and criteria
-
-See [`docs/USER_STORIES.md`](docs/USER_STORIES.md) for full dummy data.
-
----
-
-## API Contracts
-
-All API contracts are defined in [`docs/USER_STORIES.md`](docs/USER_STORIES.md) under **Story 1.1**:
-
-- VerificationReport JSON schema
-- ChatMessage JSON schema
-- JobSpec JSON schema
-- TypeScript type definitions
-
-These contracts are agreed upon before any implementation begins.
-
----
-
-## Contributing
-
-This is a solo developer project with Claude as the AI implementation partner.
-
-### Branching Strategy
-- `main`: Production-ready code
-- `develop`: Active development
-- `feature/*`: Feature branches
-- `bugfix/*`: Bug fixes
-
-### Commit Convention
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation update
-- `refactor:` Code refactoring
-- `test:` Test updates
-- `chore:` Maintenance tasks
 
 ---
 
 ## License
 
 MIT
-
----
-
-## Contact
-
-For questions or feedback, open an issue on GitHub.
-
----
-
-## Progress
-
-- [ ] Phase 1: Foundation
-- [ ] Phase 2: Authentication
-- [ ] Phase 3: Gig Type System
-- [ ] Phase 4: Job Posting (dummy data ready)
-- [ ] Phase 5: Job Browsing
-- [ ] Phase 6: Freelancer Selection
-- [ ] Phase 7: Spec Lock & Escrow
-- [ ] Phase 8: Work Submission
-- [ ] Phase 9: AI Verification
-- [ ] Phase 10: Verification Report UI
-- [ ] Phase 11: Payment Decisions
-- [ ] Phase 12: Basic PFI
-- [ ] Phase 13: AI-Mediated Chat
-- [ ] Phase 14: Revision Loop
-- [ ] Phase 15: Change Requests
-- [ ] Phase 16: Disputes
-- [ ] Phase 17: Asset Delivery Tracking
-- [ ] Phase 18: Polish
-
----
-
-**Built for hackathon judges. Made for trust. 🤝**
