@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { MilestoneCard } from '@/components/jobs/MilestoneCard'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { DUMMY_SPEC_SOFTWARE } from '@/data/dummy_spec'
+import { jobService, type JobSpec as APIJobSpec } from '@/lib/api/services'
 import type { JobSpec } from '@/types'
 
 type Step = 'describe' | 'review' | 'published'
@@ -20,7 +20,10 @@ export default function PostJobPage() {
   const user = useAuthStore(selectUser)
   const [step, setStep] = useState<Step>('describe')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
   const [spec, setSpec] = useState<JobSpec | null>(null)
+  const [jobId, setJobId] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ title: '', description: '', budget_min: '', budget_max: '', deadline: '' })
 
   useEffect(() => {
@@ -30,17 +33,96 @@ export default function PostJobPage() {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsGenerating(true)
-    // Simulate AI generation delay
-    await new Promise(r => setTimeout(r, 2000))
-    setSpec(DUMMY_SPEC_SOFTWARE)
-    setIsGenerating(false)
-    setStep('review')
+    setError(null)
+
+    try {
+      // Step 1: Create the job
+      const createResponse = await jobService.create({
+        title: form.title,
+        description: form.description,
+        gig_type: 'software', // Default, will be detected by AI
+        gig_subtype: 'web_development',
+        budget_min: parseFloat(form.budget_min),
+        budget_max: parseFloat(form.budget_max),
+        deadline: new Date(form.deadline).toISOString(),
+      })
+
+      if (!createResponse.success || !createResponse.data) {
+        throw new Error('Failed to create job')
+      }
+
+      const newJobId = createResponse.data.id
+      setJobId(newJobId)
+
+      // Step 2: Generate the spec
+      const specResponse = await jobService.generateSpec(newJobId)
+
+      if (specResponse.success && specResponse.data) {
+        // Transform API response to match local JobSpec type
+        const apiSpec = specResponse.data
+        const transformedSpec: JobSpec = {
+          spec_id: `spec_${apiSpec.id}`,
+          job_id: `job_${apiSpec.job_id}`,
+          version: 1,
+          is_locked: apiSpec.is_locked || false,
+          milestones: (apiSpec.milestones_json || []).map((m: any, idx: number) => ({
+            milestone_id: m.id || `m_${idx}`,
+            title: m.title,
+            order: idx + 1,
+            deadline: m.deadline || form.deadline || new Date().toISOString(),
+            criteria: (m.deliverables || []).map((d: string, i: number) => ({
+              criterion_id: `c_${idx}_${i}`,
+              name: d,
+              description: d,
+              is_verifiable: true,
+              status: 'PENDING' as const,
+              is_vague: false,
+              vague_resolved: true,
+            })),
+            submission_requirements: [{
+              type: 'github_link' as const,
+              description: 'Submit your code repository link',
+            }],
+          })),
+          required_assets: [],
+          clarifications: [],
+          locked_at: undefined,
+        }
+        setSpec(transformedSpec)
+        setStep('review')
+      } else {
+        throw new Error('Failed to generate spec')
+      }
+    } catch (err: any) {
+      console.error('Failed to generate spec:', err)
+      setError(err.response?.data?.error || err.message || 'Failed to generate spec. Please try again.')
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const vagueCount = spec?.milestones.flatMap(m => m.criteria).filter(c => c.is_vague && !c.vague_resolved).length ?? 0
 
-  const handlePublish = () => {
-    setStep('published')
+  const handlePublish = async () => {
+    if (!jobId) return
+
+    setIsPublishing(true)
+    setError(null)
+
+    try {
+      const response = await jobService.publish(jobId)
+
+      if (response.success) {
+        setStep('published')
+      } else {
+        throw new Error('Failed to publish job')
+      }
+    } catch (err: any) {
+      console.error('Failed to publish:', err)
+      setError(err.response?.data?.error || 'Failed to publish job. Please try again.')
+    } finally {
+      setIsPublishing(false)
+    }
   }
 
   if (step === 'published') {
@@ -84,6 +166,12 @@ export default function PostJobPage() {
             <h1 className="text-2xl font-bold text-foreground mb-1">Post a Job</h1>
             <p className="text-muted-foreground text-sm">Describe your project and AI will generate a structured, verifiable spec.</p>
           </div>
+
+          {error && (
+            <div className="p-4 bg-error/10 border border-error/30 rounded-lg text-error text-sm">
+              {error}
+            </div>
+          )}
 
           <div>
             <Label htmlFor="title">Job Title</Label>
@@ -194,15 +282,29 @@ export default function PostJobPage() {
             </div>
           </div>
 
+          {error && (
+            <div className="p-4 bg-error/10 border border-error/30 rounded-lg text-error text-sm">
+              {error}
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setStep('describe')}>← Back</Button>
+            <Button variant="secondary" onClick={() => setStep('describe')} disabled={isPublishing}>← Back</Button>
             <Button
               variant="primary"
               className="flex-1"
               onClick={handlePublish}
-              disabled={vagueCount > 0}
+              disabled={vagueCount > 0 || isPublishing}
             >
-              {vagueCount > 0 ? `Resolve ${vagueCount} flag${vagueCount > 1 ? 's' : ''} to publish` : 'Publish Job →'}
+              {isPublishing ? (
+                <span className="flex items-center gap-2">
+                  <LoadingSpinner size="sm" /> Publishing...
+                </span>
+              ) : vagueCount > 0 ? (
+                `Resolve ${vagueCount} flag${vagueCount > 1 ? 's' : ''} to publish`
+              ) : (
+                'Publish Job →'
+              )}
             </Button>
           </div>
         </div>

@@ -34,9 +34,9 @@ export function BidCard({ bid, onAccept, showAccept = false }: BidCardProps) {
         )}
         {bid.proposed_deadline && (
           <div>
-            <span className="text-muted-foreground">By: </span>
+            <span className="text-muted-foreground">Timeline: </span>
             <span className="font-medium text-foreground">
-              {new Date(bid.proposed_deadline).toLocaleDateString()}
+              {bid.proposed_deadline}
             </span>
           </div>
         )}

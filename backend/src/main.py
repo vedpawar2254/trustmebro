@@ -19,7 +19,7 @@ from src.auth import (
     decode_access_token,
 )
 from src.utils.logger import api_logger
-from src.routes import jobs, verify, escrow_submissions, auth, uploads, chat, payments, change_requests, disputes, dashboard
+from src.routes import jobs, verify, escrow_submissions, auth, uploads, chat, payments, change_requests, disputes, dashboard, scheduler, users
 from src.services.email_service import email_service
 
 
@@ -56,6 +56,8 @@ app.include_router(payments.router)
 app.include_router(change_requests.router)
 app.include_router(disputes.router)
 app.include_router(dashboard.router)
+app.include_router(scheduler.router)
+app.include_router(users.router)
 
 
 @app.on_event("startup")

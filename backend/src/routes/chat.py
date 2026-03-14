@@ -10,6 +10,7 @@ from src.models import (
 )
 from src.schemas import SendMessageRequest, ChatChannelResponse, ChatMessageResponse, SuccessResponse
 from src.services.bro_mediator import bro_mediator
+from src.services.ghost_protocol import ghost_protocol
 from src.utils.logger import api_logger
 from src.auth import decode_access_token
 
@@ -279,6 +280,9 @@ async def send_chat_message(
     db.refresh(new_message)
 
     api_logger.info(f"Message {new_message.id} sent in channel {channel.id} by user {current_user['user_id']}")
+
+    # Resolve any ghost status for this user (they're active now)
+    ghost_protocol.resolve_ghost_status(job_id, current_user["user_id"], db)
 
     response_data = {
         "message_id": new_message.id,

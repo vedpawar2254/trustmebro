@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { authService } from '@/lib/api/services';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,20 +14,37 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setIsLoading(true);
 
-    const mockUser = {
-      id: 'user_123',
-      name: 'Test User',
-      email: email,
-      role: 'employer' as 'employer' | 'freelancer',
-    };
+    try {
+      const response = await authService.login({ email, password });
 
-    login(mockUser, 'mock_token');
+      const user = {
+        id: String(response.user.id),
+        name: response.user.name,
+        email: response.user.email,
+        role: response.user.role as 'employer' | 'freelancer',
+        pfi_score: response.user.pfi_score,
+      };
 
-    router.push('/employer/dashboard');
+      login(user, response.token);
+
+      // Redirect based on role
+      const redirectUrl = response.user.role === 'employer'
+        ? '/employer/dashboard'
+        : '/freelancer/dashboard';
+      router.push(redirectUrl);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Invalid email or password');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -89,6 +107,11 @@ export default function LoginPage() {
 
           {/* FORM */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-6 max-w-md">
+            {error && (
+              <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-md text-red-300 text-sm">
+                {error}
+              </div>
+            )}
 
             <Input
               type="email"
@@ -97,6 +120,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="h-12 rounded-md px-4 bg-[rgb(60,54,76)] border border-white/20 text-white placeholder:text-gray-400 focus:ring-2 focus:ring-purple-500 focus:outline-none"
               required
+              disabled={isLoading}
             />
 
             <Input
@@ -106,10 +130,11 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               className="h-12 rounded-md px-4 bg-[rgb(60,54,76)] border border-white/20 text-white placeholder:text-gray-400 focus:ring-2 focus:ring-purple-500 focus:outline-none"
               required
+              disabled={isLoading}
             />
 
-            <Button type="submit" className="w-full py-3 text-base bg-[rgb(109,84,181)] rounded-md">
-              Login
+            <Button type="submit" className="w-full py-3 text-base bg-[rgb(109,84,181)] rounded-md" disabled={isLoading}>
+              {isLoading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
 

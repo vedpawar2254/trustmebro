@@ -270,3 +270,41 @@ class PaginatedResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# Notification Preferences Schemas
+class EmailFrequencyEnum(str, Enum):
+    IMMEDIATE = "immediate"
+    DAILY_DIGEST = "daily_digest"
+    WEEKLY_DIGEST = "weekly_digest"
+
+
+class NotificationPreferencesResponse(BaseModel):
+    bid_notifications: bool = True
+    assignment_notifications: bool = True
+    submission_notifications: bool = True
+    payment_notifications: bool = True
+    deadline_reminders: bool = True
+    ghost_warnings: bool = True
+    dispute_notifications: bool = True
+    change_request_notifications: bool = True
+    verification_results: bool = True
+    chat_notifications: bool = True
+    email_frequency: str = "immediate"
+
+    class Config:
+        from_attributes = True
+
+
+class UpdateNotificationPreferencesRequest(BaseModel):
+    bid_notifications: Optional[bool] = None
+    assignment_notifications: Optional[bool] = None
+    submission_notifications: Optional[bool] = None
+    payment_notifications: Optional[bool] = None
+    deadline_reminders: Optional[bool] = None
+    ghost_warnings: Optional[bool] = None
+    dispute_notifications: Optional[bool] = None
+    change_request_notifications: Optional[bool] = None
+    verification_results: Optional[bool] = None
+    chat_notifications: Optional[bool] = None
+    email_frequency: Optional[EmailFrequencyEnum] = None

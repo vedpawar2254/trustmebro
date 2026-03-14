@@ -749,11 +749,9 @@ async def assign_freelancer(
     job.assigned_freelancer_id = assignment_data.freelancer_id
     job.assigned_at = datetime.utcnow()
 
-    # Lock spec when freelancer is assigned
-    spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
-    if spec and not spec.is_locked:
-        spec.is_locked = True
-        spec.locked_at = datetime.utcnow()
+    # NOTE: Spec is NOT auto-locked on assignment.
+    # Both parties must call /spec/lock to confirm agreement before escrow can be funded.
+    # This ensures mutual agreement on the spec terms.
 
     # Update bid statuses
     bid.status = BidStatus.ACCEPTED
@@ -790,11 +788,16 @@ async def assign_freelancer(
             employer_name=employer.name
         )
 
+    # Get spec lock status
+    spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
+    spec_locked = spec.is_locked if spec else False
+
     return SuccessResponse(data={
         "job_id": job_id,
         "status": job.status.value,
         "assigned_freelancer_id": assignment_data.freelancer_id,
         "assigned_freelancer_name": get_user_name(assignment_data.freelancer_id, db),
         "assigned_at": job.assigned_at.isoformat(),
-        "spec_locked": True,
+        "spec_locked": spec_locked,
+        "next_step": "Both parties must call /spec/lock to confirm agreement before escrow can be funded." if not spec_locked else "Ready to fund escrow.",
     })

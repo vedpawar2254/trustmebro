@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { authService } from '@/lib/api/services';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -51,22 +52,25 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // TODO: Replace with actual API call
-      // const response = await api.post('/auth/register', formData);
-
-      // Mock successful registration for now
-      const mockUser = {
-        id: 'user_123',
+      const response = await authService.register({
         name: formData.name,
         email: formData.email,
+        password: formData.password,
         role: formData.role,
-      };
-      const mockToken = 'mock_jwt_token';
+      });
 
-      login(mockUser, mockToken);
+      const user = {
+        id: String(response.user.id),
+        name: response.user.name,
+        email: response.user.email,
+        role: response.user.role as 'employer' | 'freelancer',
+        pfi_score: response.user.pfi_score,
+      };
+
+      login(user, response.token);
 
       // Redirect to appropriate dashboard
-      const redirectUrl = formData.role === 'employer'
+      const redirectUrl = response.user.role === 'employer'
         ? '/employer/dashboard'
         : '/freelancer/dashboard';
       router.push(redirectUrl);
@@ -74,7 +78,7 @@ export default function RegisterPage() {
       if (err.response?.data?.error) {
         setErrors({ email: err.response.data.error });
       } else {
-        alert('Something went wrong. Please try again.');
+        setErrors({ email: 'Something went wrong. Please try again.' });
       }
     } finally {
       setIsLoading(false);

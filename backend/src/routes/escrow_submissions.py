@@ -74,6 +74,14 @@ async def fund_escrow(
     if job.status != JobStatus.ASSIGNED:
         raise HTTPException(status_code=400, detail="Job must be assigned before funding escrow")
 
+    # Check spec is locked (mutual agreement required)
+    spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
+    if not spec or not spec.is_locked:
+        raise HTTPException(
+            status_code=400,
+            detail="Spec must be locked by both parties before funding escrow. Both employer and freelancer must call /spec/lock."
+        )
+
     existing_escrow = db.query(Escrow).filter(Escrow.job_id == job_id).first()
     if existing_escrow:
         raise HTTPException(status_code=409, detail="Escrow already exists for this job")
@@ -276,14 +284,21 @@ async def refund_escrow(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Refund escrow to employer (for disputes or failed jobs)."""
+    """
+    Refund escrow to employer.
+
+    RESTRICTED: Direct refunds are only allowed when:
+    - No work has been submitted yet (job status = ESCROW_FUNDED, no submissions)
+    - Or a dispute has been resolved in employer's favor
+
+    For other cases, use the dispute resolution process.
+    """
     current_user = require_auth(request)
 
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Only employer can request refund (would normally go through dispute process)
     if job.employer_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="Only the employer can request refund")
 
@@ -297,10 +312,25 @@ async def refund_escrow(
     if escrow.status == EscrowStatus.REFUNDED:
         raise HTTPException(status_code=400, detail="Escrow already refunded")
 
+    # Check if direct refund is allowed
+    submissions = db.query(Submission).filter(Submission.job_id == job_id).count()
+
+    if submissions > 0 and job.status != JobStatus.DISPUTED:
+        raise HTTPException(
+            status_code=400,
+            detail="Work has been submitted. You must open a dispute to request a refund. Use POST /api/jobs/{job_id}/dispute"
+        )
+
+    # Direct refund allowed (no work submitted)
     escrow.status = EscrowStatus.REFUNDED
     escrow.refunded_at = datetime.utcnow()
 
-    job.status = JobStatus.DISPUTED
+    # Update job status appropriately
+    if submissions == 0:
+        # No work done - cancel the job
+        job.status = JobStatus.DRAFT  # Reset to draft
+    else:
+        job.status = JobStatus.DISPUTED
 
     db.commit()
 
@@ -756,6 +786,11 @@ async def resubmit_work(
 
     if original_submission.resubmissions_remaining <= 0:
         raise HTTPException(status_code=400, detail="No resubmissions remaining for this milestone")
+
+    # Check deadline (with grace period)
+    can_submit, reason = deadline_enforcer.can_submit_work(job, db)
+    if not can_submit:
+        raise HTTPException(status_code=400, detail=f"Cannot resubmit work: {reason}")
 
     # Create new submission
     new_submission = Submission(

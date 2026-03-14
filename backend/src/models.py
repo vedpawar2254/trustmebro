@@ -372,3 +372,32 @@ class GhostEvent(Base):
     # Relationships
     job = relationship("Job")
     user = relationship("User")
+
+
+class NotificationPreference(Base):
+    """User notification preferences."""
+    __tablename__ = "notification_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+
+    # Email notification toggles
+    bid_notifications = Column(Boolean, default=True, nullable=False)
+    assignment_notifications = Column(Boolean, default=True, nullable=False)
+    submission_notifications = Column(Boolean, default=True, nullable=False)
+    payment_notifications = Column(Boolean, default=True, nullable=False)
+    deadline_reminders = Column(Boolean, default=True, nullable=False)
+    ghost_warnings = Column(Boolean, default=True, nullable=False)
+    dispute_notifications = Column(Boolean, default=True, nullable=False)
+    change_request_notifications = Column(Boolean, default=True, nullable=False)
+    verification_results = Column(Boolean, default=True, nullable=False)
+    chat_notifications = Column(Boolean, default=True, nullable=False)
+
+    # Email frequency preference
+    email_frequency = Column(String(20), default="immediate", nullable=False)  # immediate, daily_digest, weekly_digest
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
