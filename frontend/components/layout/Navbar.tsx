@@ -13,10 +13,12 @@ export function Navbar() {
 
   const isEmployerView = pathname?.startsWith('/employer');
   const isFreelancerView = pathname?.startsWith('/freelancer');
+  const isProjectView = pathname?.startsWith('/projects');
   const isAuthPage = pathname?.startsWith('/login') || pathname?.startsWith('/register');
+  const isDashboardView = isEmployerView || isFreelancerView || isProjectView;
 
-  // Don't show navbar on auth pages
-  if (isAuthPage) {
+  // Don't show navbar on auth or dashboard pages
+  if (isAuthPage || isDashboardView) {
     return null;
   }
 

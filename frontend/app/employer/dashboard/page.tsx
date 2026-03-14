@@ -7,8 +7,8 @@ import { useAuthStore, selectUserRole, selectUser } from '@/store/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MeterRing } from '@/components/ui/meter-ring';
-import { Sidebar } from '../../freelancer/dashboard/Sidebar';
 import { FreelancerMap } from '../../freelancer/dashboard/FreelancerMap';
+import { DashboardLayout } from '../../freelancer/dashboard/DashboardLayout';
 
 export default function EmployerDashboard() {
   const router = useRouter();
@@ -26,18 +26,20 @@ export default function EmployerDashboard() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto p-8 md:ml-[260px]">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-foreground">
-              Welcome back, {user.name}!
-            </h1>
-            <Link href="/employer/post-job">
-              <Button variant="primary">+ Post New Job</Button>
-            </Link>
-          </div>
+    <DashboardLayout>
+      {/* App Header */}
+      <div className="px-8 py-6 border-b border-border bg-background flex flex-col sm:flex-row items-start sm:items-center justify-between z-10">
+        <h1 className="text-3xl font-bold text-foreground">
+          Welcome back, {user.name}!
+        </h1>
+        <Link href="/employer/post-job" className="mt-4 sm:mt-0">
+          <Button variant="primary">+ Post New Job</Button>
+        </Link>
+      </div>
+
+      {/* Main scrollable content block */}
+      <main className="flex-1 overflow-y-auto w-full">
+        <div className="max-w-7xl mx-auto p-8">
 
           {/* Stats / Overview Section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -110,6 +112,6 @@ export default function EmployerDashboard() {
           </Card>
         </div>
       </main>
-    </div>
+    </DashboardLayout>
   );
 }

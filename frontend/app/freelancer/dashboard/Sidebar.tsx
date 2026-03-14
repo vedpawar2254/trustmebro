@@ -17,7 +17,7 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-[260px] h-screen fixed left-0 top-0 bg-[rgb(44,38,56)] text-white p-6 flex flex-col z-20 transition-transform duration-300 md:translate-x-0 -translate-x-full">
+    <aside className="w-[260px] flex-shrink-0 flex flex-col h-full bg-[rgb(44,38,56)] text-white p-6 z-20 transition-transform duration-300 md:translate-x-0 -translate-x-full">
       {/* Top Header */}
       <div className="mb-10">
         <h2 className="text-2xl font-bold tracking-tight text-white mb-1">trustmebro</h2>
