@@ -233,4 +233,4 @@ export const DUMMY_JOBS: Job[] = [
   }
 ];
 
-export const getJobById = (id: string) => DUMMY_JOBS.find(job => job.job_id === id);
+export const getJobById = (id: string) => DUMMY_JOBS.find(j => j.job_id === id);

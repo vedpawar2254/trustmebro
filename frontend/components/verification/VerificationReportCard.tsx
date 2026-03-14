@@ -1,23 +1,21 @@
 'use client';
 
-import { VerificationReport, CriterionStatus, GigType } from '@/types';
+import { VerificationReport, VerificationStatus, GigType } from '@/types';
 
 interface VerificationReportCardProps {
   report: VerificationReport;
 }
 
-const verificationStatusIcons: Record<CriterionStatus, string> = {
-  PASS: 'check-circle',
-  PARTIAL: 'alert-circle',
-  FAIL: 'x-circle',
-  PENDING: 'clock',
+const verificationStatusIcons: Record<VerificationStatus, string>> = {
+  PASS: 'check-circle'
+  PARTIAL: 'alert-circle'
+  FAIL: 'x-circle'
 };
 
-const verificationStatusColors: Record<CriterionStatus, string> = {
-  PASS: 'text-green-600',
-  PARTIAL: 'text-amber-500',
-  FAIL: 'text-red-600',
-  PENDING: 'text-gray-500',
+const verificationStatusColors: Record<VerificationStatus, string>> = {
+  PASS: 'text-green-600'
+  PARTIAL: 'text-amber-500'
+  FAIL: 'text-red-600'
 };
 
 const paymentDecisionConfig = {
@@ -45,7 +43,7 @@ const paymentDecisionColors = {
 };
 
 export function VerificationReportCard({ report }: VerificationReportCardProps) {
-  const paymentConfig = paymentDecisionConfig[report.payment_decision as keyof typeof paymentDecisionConfig];
+  const paymentConfig = paymentDecisionConfig[report.payment_decision];
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -53,12 +51,12 @@ export function VerificationReportCard({ report }: VerificationReportCardProps) 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div>
-              {verificationStatusIcons[report.payment_decision as unknown as CriterionStatus]}
+              {verificationStatusIcons[report.payment_decision]}
             </div>
-            <div className={`text-lg font-bold ${paymentConfig?.color}`}>
-              {paymentConfig?.label}
+            <div className={`text-lg font-bold ${paymentConfig.color}`}>
+              {paymentConfig.label}
               {' '}
-              {paymentConfig?.icon}
+              {paymentConfig.icon}
             </div>
           </div>
         </div>
@@ -79,19 +77,21 @@ export function VerificationReportCard({ report }: VerificationReportCardProps) 
           </h4>
           <div className="space-y-4">
             {report.criteria.map((criterion, idx) => (
-              <div key={idx} className="flex items-start gap-3">
-                <div className="flex-shrink-0">
-                  {verificationStatusIcons[criterion.status as CriterionStatus]}
+              <div
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0">
+                    {verificationStatusIcons[criterion.status]}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`font-medium ${verificationStatusColors[criterion.status]}`}>
+                      {criterion.name}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {criterion.detail}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className={`font-medium ${verificationStatusColors[criterion.status as CriterionStatus]}`}>
-                    {criterion.name}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {criterion.detail}
-                  </p>
                 </div>
-              </div>
             ))}
           </div>
         </div>
@@ -123,7 +123,6 @@ export function VerificationReportCard({ report }: VerificationReportCardProps) 
             <div className="flex items-center gap-2 text-blue-700">
               <span>Resubmissions remaining: {report.resubmissions_remaining}</span>
             </div>
-          </div>
         )}
       </div>
     </div>

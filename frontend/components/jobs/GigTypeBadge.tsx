@@ -1,3 +1,5 @@
+'use client';
+
 import { GigType, GigSubtype } from '@/types';
 
 interface GigTypeBadgeProps {
@@ -5,36 +7,55 @@ interface GigTypeBadgeProps {
   gigSubtype: GigSubtype;
 }
 
-const getGigTypeColor = (type: GigType) => {
-  switch (type) {
-    case 'SOFTWARE':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'COPYWRITING':
-      return 'bg-purple-100 text-purple-800 border-purple-200';
-    case 'DATA_ENTRY':
-      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    case 'TRANSLATION':
-      return 'bg-amber-100 text-amber-800 border-amber-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
+const TYPE_MAP: Record<GigType, { class: string; label: string }> = {
+  SOFTWARE: { class: 'blue', label: 'Software' },
+  COPYWRITING: { class: 'warn', label: 'Writing' },
+  DATA_ENTRY: { class: 'success', label: 'Data' },
+  TRANSLATION: { class: 'purple', label: 'Translation' },
 };
 
-const formatSubtype = (subtype: string) => {
-  return subtype
-    .split('_')
-    .map(word => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(' ');
+const SUBTYPE_FORMATS: Record<string, string> = {
+  // Software
+  WEB_DEVELOPMENT: 'Web Dev',
+  MOBILE_DEVELOPMENT: 'Mobile Dev',
+  DESKTOP_APPLICATIONS: 'Desktop',
+  APIS_INTEGRATIONS: 'APIs',
+  DATABASE_DESIGN: 'Database',
+  DEVOPS_INFRASTRUCTURE: 'DevOps',
+  // Copywriting
+  BLOG_POSTS: 'Articles',
+  WEBSITE_COPY: 'Site Copy',
+  EMAIL_MARKETING: 'Email',
+  SOCIAL_MEDIA: 'Social',
+  PRODUCT_DESCRIPTIONS: 'Products',
+  SALES_MARKETING: 'Sales',
+  // Data Entry
+  FORM_DIGITIZATION: 'Forms',
+  DATABASE_POPULATION: 'Database',
+  DATA_CLEANING: 'Cleaning',
+  SPREADSHEET_CREATION: 'Sheets',
+  DOCUMENT_TRANSCRIPTION: 'Transcription',
+  DATA_EXTRACTION: 'Extraction',
+  // Translation
+  WEBSITE_LOCALIZATION: 'Localization',
+  DOCUMENT_TRANSLATION: 'Doc Trans',
+  SUBTITLE_TRANSLATION: 'Subtitles',
+  MARKETING_TRANSLATION: 'Marketing',
+  SOFTWARE_UI_TRANSLATION: 'UI Trans',
+  AUDIO_VIDEO_TRANSLATION: 'AV Trans',
 };
 
 export function GigTypeBadge({ gigType, gigSubtype }: GigTypeBadgeProps) {
+  const typeInfo = TYPE_MAP[gigType] || { class: 'info', label: gigType };
+  const subtypeLabel = SUBTYPE_FORMATS[gigSubtype] || gigSubtype.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+
   return (
-    <div className="flex flex-col gap-1 items-end">
-      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getGigTypeColor(gigType)}`}>
-        {gigType}
+    <div className="flex flex-col items-end gap-1.5">
+      <span className={`dash-badge ${typeInfo.class}`}>
+        {typeInfo.label}
       </span>
-      <span className="text-xs text-gray-500">
-        {formatSubtype(gigSubtype)}
+      <span className="text-[10px] font-bold uppercase tracking-wider text-[#4a3866] px-1 whitespace-nowrap">
+        {subtypeLabel}
       </span>
     </div>
   );
