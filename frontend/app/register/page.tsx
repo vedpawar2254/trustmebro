@@ -70,9 +70,10 @@ export default function RegisterPage() {
         ? '/employer/dashboard'
         : '/freelancer/dashboard';
       router.push(redirectUrl);
-    } catch (err: any) {
-      if (err.response?.data?.error) {
-        setErrors({ email: err.response.data.error });
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      if (error.response?.data?.error) {
+        setErrors({ email: error.response.data.error });
       } else {
         alert('Something went wrong. Please try again.');
       }

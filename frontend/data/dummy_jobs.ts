@@ -232,3 +232,5 @@ export const DUMMY_JOBS: Job[] = [
     published_at: '2024-03-22T10:30:00Z'
   }
 ];
+
+export const getJobById = (id: string) => DUMMY_JOBS.find(job => job.job_id === id);
