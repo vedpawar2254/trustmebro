@@ -229,6 +229,9 @@ export const DUMMY_JOBS: Job[] = [
     employer_name: 'Eva Martinez',
     employer_pfi: 90,
     created_at: '2024-03-22T10:00:00Z',
-    published_at: '2024-03-22T10:30:00Z'
   }
 ];
+
+export const getJobById = (id: string): Job | undefined => {
+  return DUMMY_JOBS.find(job => job.job_id === id);
+};

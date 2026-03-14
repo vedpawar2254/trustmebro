@@ -7,9 +7,11 @@ import { formatDistanceToNow } from 'date-fns';
 
 interface JobCardProps {
   job: Job;
+  linkPrefix?: string;
 }
 
-export function JobCard({ job }: JobCardProps) {
+export function JobCard({ job, linkPrefix }: JobCardProps) {
+  const href = `${linkPrefix || '/freelancer/jobs'}/${job.job_id}`;
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer">
       <div className="flex justify-between items-start mb-4">
@@ -45,7 +47,7 @@ export function JobCard({ job }: JobCardProps) {
         </div>
 
         <Link
-          href={`/freelancer/jobs/${job.job_id}`}
+          href={href}
           className="px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover active:bg-primary-active text-sm"
         >
           View Spec

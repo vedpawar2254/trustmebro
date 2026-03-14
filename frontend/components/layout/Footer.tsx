@@ -1,6 +1,17 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export function Footer() {
+  const pathname = usePathname();
+  const isDashboardView = pathname?.includes('/dashboard') || pathname?.includes('/employer') || pathname?.includes('/freelancer') || pathname?.includes('/projects');
+
+  // Don't show footer on dashboard pages
+  if (isDashboardView) {
+    return null;
+  }
+
   return (
     <footer className="bg-card border-t border-border px-6 py-8">
       <div className="max-w-7xl mx-auto">
