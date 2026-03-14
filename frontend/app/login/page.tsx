@@ -10,101 +10,129 @@ import { Button } from '@/components/ui/button';
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
 
-    try {
-      // TODO: Replace with actual API call
-      // const response = await api.post('/auth/login', { email, password });
+    const mockUser = {
+      id: 'user_123',
+      name: 'Test User',
+      email: email,
+      role: 'employer' as 'employer' | 'freelancer',
+    };
 
-      // Mock successful login for now
-      const mockUser = {
-        id: 'user_123',
-        name: 'Test User',
-        email: email,
-        role: 'employer' as 'employer' | 'freelancer',
-      };
-      const mockToken = 'mock_jwt_token';
+    login(mockUser, 'mock_token');
 
-      login(mockUser, mockToken);
-
-      // Redirect to appropriate dashboard
-      const redirectUrl = mockUser.role === 'employer'
-        ? '/employer/dashboard'
-        : '/freelancer/dashboard';
-      router.push(redirectUrl);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    router.push('/employer/dashboard');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">trustmebro</h1>
-          <p className="text-muted-foreground">Welcome back</p>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-[rgb(96,90,113)]">
+
+      {/* MAIN CONTAINER */}
+      <div className="w-full max-w-6xl h-[720px] rounded-2xl overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-2">
+
+        {/* LEFT PANEL */}
+        <div
+          className="relative hidden lg:flex flex-col justify-between p-8 text-white bg-cover bg-center"
+          style={{
+            backgroundImage:
+              "url('https://img.sanishtech.com/u/e14a8ea2bb465e61d1e237fef9a98292.png')",
+          }}
+        >
+          {/* DARK OVERLAY */}
+          <div className="absolute inset-0 bg-black/40"></div>
+
+          {/* TOP BAR */}
+          <div className="relative z-10 flex justify-between items-center">
+            <h2 className="text-lg font-semibold">trustmebro</h2>
+
+            <Link
+              href="/"
+              className="text-sm px-4 py-2 border border-white/40 rounded-full hover:bg-white hover:text-black transition"
+            >
+              Back to website →
+            </Link>
+          </div>
+
+          {/* BOTTOM TEXT */}
+          <div className="relative z-10">
+            <p className="text-2xl font-semibold mb-2">
+              Hire AI freelancers smarter
+            </p>
+
+            <p className="text-sm text-white/80">
+              AI-generated specs. Automatic matching. Trusted execution.
+            </p>
+          </div>
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-8 shadow-sm">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Email
-              </label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="john@example.com"
-                required
-              />
-            </div>
+        {/* RIGHT PANEL */}
+        <div className="flex flex-col justify-center px-12 py-12 bg-[rgb(44,38,56)]">
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Password
-              </label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </div>
+          {/* Heading */}
+          <div className="mb-10">
+            <h1 className="text-3xl font-bold mb-2 text-white">
+              Login to your account
+            </h1>
 
-            {error && (
-              <div className="bg-red-50 text-error p-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
+            <p className="text-gray-400 text-sm">
+              Don’t have an account?{' '}
+              <Link href="/register" className="font-medium underline">
+                Sign up
+              </Link>
+            </p>
+          </div>
 
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Logging in...' : 'Login'}
+          {/* FORM */}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6 max-w-md">
+
+            <Input
+              type="email"
+              placeholder="john@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-12 rounded-md px-4 bg-[rgb(60,54,76)] border border-white/20 text-white placeholder:text-gray-400 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+              required
+            />
+
+            <Input
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-12 rounded-md px-4 bg-[rgb(60,54,76)] border border-white/20 text-white placeholder:text-gray-400 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+              required
+            />
+
+            <Button type="submit" className="w-full py-3 text-base bg-[rgb(109,84,181)] rounded-md">
+              Login
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <Link href="/register" className="text-primary font-semibold hover:underline">
-              Sign up
-            </Link>
+          {/* DIVIDER */}
+          <div className="flex items-center gap-4 my-8 max-w-md text-sm text-gray-400">
+            <div className="flex-1 h-px bg-white/20"></div>
+            Or continue with
+            <div className="flex-1 h-px bg-white/20"></div>
           </div>
+
+          {/* SOCIAL LOGIN */}
+          <div className="grid grid-cols-2 gap-4 max-w-md">
+
+            <Button variant="outline" className="w-full border-white/20 text-white border">
+              Google
+            </Button>
+
+            <Button variant="outline" className="w-full border-white/20 text-white border">
+              Apple
+            </Button>
+
+          </div>
+
         </div>
       </div>
     </div>
