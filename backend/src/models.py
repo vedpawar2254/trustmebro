@@ -38,6 +38,42 @@ class GigType(str, Enum):
     TRANSLATION = "translation"
 
 
+class GigSubtype(str, Enum):
+    """Gig subtypes for each gig type."""
+    # Software subtypes
+    WEB_DEVELOPMENT = "web_development"
+    MOBILE_APP = "mobile_app"
+    DESKTOP_APP = "desktop_app"
+    API_DEVELOPMENT = "api_development"
+    GAME_DEVELOPMENT = "game_development"
+    BLOCKCHAIN = "blockchain"
+    DEVOPS = "devops"
+    DATA_SCIENCE = "data_science"
+    
+    # Copywriting subtypes
+    BLOG_POSTS = "blog_posts"
+    WEBSITE_COPY = "website_copy"
+    MARKETING_EMAILS = "marketing_emails"
+    SOCIAL_MEDIA = "social_media"
+    TECHNICAL_WRITING = "technical_writing"
+    PRESS_RELEASES = "press_releases"
+    
+    # Data Entry subtypes
+    SPREADSHEET_DATA = "spreadsheet_data"
+    DATABASE_ENTRY = "database_entry"
+    WEB_SCRAPING = "web_scraping"
+    FORM_PROCESSING = "form_processing"
+    IMAGE_TRANSCRIPTION = "image_transcription"
+    
+    # Translation subtypes
+    DOCUMENT_TRANSLATION = "document_translation"
+    WEBSITE_TRANSLATION = "website_translation"
+    APP_TRANSLATION = "app_translation"
+    SUBTITLE_TRANSLATION = "subtitle_transSLATION"
+    LEGAL_TRANSLATION = "legal_translation"
+    TECHNICAL_TRANSLATION = "technical_translation"
+
+
 class BidStatus(str, Enum):
     """Bid statuses."""
     PENDING = "pending"
