@@ -219,7 +219,7 @@ class SoftwareLane(VerificationLane):
 
             system_prompt = "You are a code review expert. Analyze repository structure to verify feature implementation."
 
-            response = await ai_client.generate_json_completion(prompt, system_prompt)
+            response = await openrouter_client.generate_json_completion(prompt, system_prompt)
 
             if response.get("all_implemented"):
                 return "PASS", response.get("details", "All features implemented"), 1.0

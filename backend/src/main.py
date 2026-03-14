@@ -17,7 +17,7 @@ from src.auth import (
     decode_access_token,
 )
 from src.utils.logger import api_logger
-from src.routes import jobs, verify, escrow_submissions
+from src.routes import jobs, verify, escrow_submissions, auth
 from sqlalchemy.orm import Session
 
 
@@ -110,6 +110,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(verify.router)
 app.include_router(escrow_submissions.router)
@@ -210,17 +211,29 @@ async def register(
 
         # Create new user
         hashed_password = get_password_hash(register_data.password)
+
+        # Generate email verification token
+        import secrets
+        verification_token = secrets.token_urlsafe(32)
+
         new_user = User(
             name=register_data.name,
             email=register_data.email,
             password_hash=hashed_password,
             role=register_data.role,
             pfi_score=100.0 if register_data.role == UserRole.EMPLOYER else 90.0,  # Default PFI
+            email_verified=False,
+            email_verification_token=verification_token,
         )
 
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
+
+        # Log verification token for development
+        main_logger.info(f"Verification token for {new_user.email}: {verification_token}")
+        main_logger.info(f"In production, send email to: {new_user.email}")
+        main_logger.info(f"Verification URL: http://localhost:3000/verify-email?token={verification_token}")
 
         # Generate token
         token = create_access_token(
@@ -305,6 +318,63 @@ async def login(
         raise
     except Exception as e:
         main_logger.error(f"Login failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong. Please try again."
+        )
+
+
+@app.post("/auth/logout")
+async def logout(
+    request: Request,
+):
+    """Logout user (invalidate token).
+
+    Since JWTs are stateless, logout is implemented client-side
+    by removing the token from storage. This endpoint provides
+    confirmation and could be used for logging/session tracking.
+
+    Args:
+        request: FastAPI request
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: Not authenticated
+    """
+    auth_header = request.headers.get("Authorization")
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing authentication token"
+        )
+
+    token = auth_header.split(" ")[1]
+    payload = decode_access_token(token)
+
+    if not payload:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication token"
+        )
+
+    try:
+        main_logger.info(f"User logout: user_id={payload.get('user_id')}")
+
+        # In a production system, you might:
+        # 1. Add token to a blacklist/revocation list
+        # 2. Record logout timestamp in user's session history
+        # 3. Clean up any session data
+
+        return {
+            "success": True,
+            "message": "Logged out successfully"
+        }
+
+    except Exception as e:
+        main_logger.error(f"Logout failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Something went wrong. Please try again."

@@ -77,6 +77,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False)
     pfi_score = Column(Float, default=None)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verification_token = Column(String(255), default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

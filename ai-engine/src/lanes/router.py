@@ -3,18 +3,19 @@ from typing import Dict, Any, List
 
 from src.lanes.base import VerificationReport
 from src.lanes.software import SoftwareLane
+from src.lanes.copywriting import CopywritingLane
+from src.lanes.data_entry import DataEntryLane
+from src.lanes.translation import TranslationLane
 from src.utils.logger import verification_logger
-
 
 class VerificationLaneRouter:
     """Routes submissions to correct verification lane based on gig type."""
 
     GIG_TYPES = {
         "SOFTWARE": SoftwareLane,
-        # TODO: Add other lanes (Copywriting, Data Entry, Translation)
-        # "COPYWRITING": CopywritingLane,
-        # "DATA_ENTRY": DataEntryLane,
-        # "TRANSLATION": TranslationLane,
+        "COPYWRITING": CopywritingLane,
+        "DATA_ENTRY": DataEntryLane,
+        "TRANSLATION": TranslationLane,
     }
 
     def __init__(self):
