@@ -31,7 +31,7 @@ export default function RegisterPage() {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+    const passwordRegex = /^(?=.[A-Za-z])(?=.\d)[A-Za-z\d]{8,}$/;
     if (!formData.password || !passwordRegex.test(formData.password)) {
       newErrors.password = 'Password must be at least 8 characters with 1 letter and 1 number';
     }
