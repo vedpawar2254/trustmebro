@@ -7,6 +7,8 @@ import { useAuthStore, selectUserRole, selectUser } from '@/store/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MeterRing } from '@/components/ui/meter-ring';
+import { Sidebar } from '../../freelancer/dashboard/Sidebar';
+import { FreelancerMap } from '../../freelancer/dashboard/FreelancerMap';
 
 export default function EmployerDashboard() {
   const router = useRouter();
@@ -24,96 +26,90 @@ export default function EmployerDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-foreground">
-          Welcome back, {user.name}!
-        </h1>
-        <Link href="/employer/post-job">
-          <Button variant="primary">+ Post New Job</Button>
-        </Link>
-      </div>
-
-      {/* Stats / Overview Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <MeterRing
-          label="Active Projects"
-          value={2}
-          description="projects running"
-          progress={66}
-        />
-        <MeterRing
-          label="Pending Bids"
-          value={5}
-          description="waiting for review"
-          progress={40}
-        />
-        <MeterRing
-          label="Escrow Locked"
-          value="$1200"
-          description="total in escrow"
-          progress={80}
-        />
-      </div>
-
-      {/* Recent Activity */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="p-4 border border-border rounded-lg">
-              <div className="font-semibold text-foreground mb-1">Bob submitted Milestone 2</div>
-              <div className="text-sm text-muted-foreground mb-2">React E-commerce Platform</div>
-              <div className="text-xs text-muted-foreground">2 hours ago</div>
-              <div className="mt-2">
-                <Link href="/projects/job_001/verification/sub_hold" className="text-primary text-sm font-semibold hover:underline">
-                  View Verification Report
-                </Link>
-              </div>
-            </div>
-
-            <div className="p-4 border border-border rounded-lg">
-              <div className="font-semibold text-foreground mb-1">New bid from Sarah</div>
-              <div className="text-sm text-muted-foreground mb-2">Mobile App Development</div>
-              <div className="text-xs text-muted-foreground">5 hours ago</div>
-              <div className="mt-2">
-                <Link href="/employer/jobs/job_001" className="text-primary text-sm font-semibold hover:underline">
-                  View Bid
-                </Link>
-              </div>
-            </div>
-
-            <div className="p-4 border border-border rounded-lg">
-              <div className="font-semibold text-foreground mb-1">Project completed</div>
-              <div className="text-sm text-muted-foreground mb-2">Copywriting Package</div>
-              <div className="text-xs text-muted-foreground">1 day ago</div>
-              <div className="mt-2">
-                <Link href="/projects/job_002/verification/sub_pass" className="text-primary text-sm font-semibold hover:underline">
-                  View Report
-                </Link>
-              </div>
-            </div>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto p-8 md:ml-[260px]">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between mb-8">
+            <h1 className="text-3xl font-bold text-foreground">
+              Welcome back, {user.name}!
+            </h1>
+            <Link href="/employer/post-job">
+              <Button variant="primary">+ Post New Job</Button>
+            </Link>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Quick links */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/employer/jobs" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
-          <div className="text-2xl mb-1">📋</div>
-          <div className="font-semibold text-foreground text-sm">My Jobs</div>
-        </Link>
-        <Link href="/employer/post-job" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
-          <div className="text-2xl mb-1">✨</div>
-          <div className="font-semibold text-foreground text-sm">Post a Job</div>
-        </Link>
-        <Link href="/projects/job_002/chat" className="block p-4 bg-card border border-border rounded-lg hover:shadow-md transition-shadow text-center">
-          <div className="text-2xl mb-1">💬</div>
-          <div className="font-semibold text-foreground text-sm">Open Chat</div>
-        </Link>
-      </div>
+          {/* Stats / Overview Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <MeterRing
+              label="Active Projects"
+              value={2}
+              description="projects running"
+              progress={66}
+            />
+            <MeterRing
+              label="Pending Bids"
+              value={5}
+              description="waiting for review"
+              progress={40}
+            />
+            <MeterRing
+              label="Escrow Locked"
+              value="$1200"
+              description="total in escrow"
+              progress={80}
+            />
+          </div>
+
+          {/* Map Insight */}
+          <div className="mb-8">
+            <FreelancerMap />
+          </div>
+
+          {/* Recent Activity */}
+          <Card className="rounded-xl shadow-sm bg-card mb-8">
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="p-4 bg-muted/20 border border-border rounded-lg">
+                  <div className="font-semibold text-foreground mb-1">Bob submitted Milestone 2</div>
+                  <div className="text-sm text-muted-foreground mb-2">React E-commerce Platform</div>
+                  <div className="text-xs text-muted-foreground">2 hours ago</div>
+                  <div className="mt-2 text-right">
+                    <Link href="/projects/job_001/verification/sub_hold" className="text-primary text-sm font-semibold hover:underline">
+                      View Verification Report →
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/20 border border-border rounded-lg">
+                  <div className="font-semibold text-foreground mb-1">New bid from Sarah</div>
+                  <div className="text-sm text-muted-foreground mb-2">Mobile App Development</div>
+                  <div className="text-xs text-muted-foreground">5 hours ago</div>
+                  <div className="mt-2 text-right">
+                    <Link href="/employer/jobs/job_001" className="text-primary text-sm font-semibold hover:underline">
+                      View Bid →
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/20 border border-border rounded-lg">
+                  <div className="font-semibold text-foreground mb-1">Project completed</div>
+                  <div className="text-sm text-muted-foreground mb-2">Copywriting Package</div>
+                  <div className="text-xs text-muted-foreground">1 day ago</div>
+                  <div className="mt-2 text-right">
+                    <Link href="/projects/job_002/verification/sub_pass" className="text-primary text-sm font-semibold hover:underline">
+                      View Report →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
     </div>
   );
 }
