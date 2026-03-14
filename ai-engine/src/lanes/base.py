@@ -5,14 +5,21 @@ from typing import Dict, Any, Optional
 from pydantic import BaseModel
 
 
+class CriterionType:
+    """Criterion priority types with weights."""
+    PRIMARY = "PRIMARY"      # 60% weight - Must-have requirements
+    SECONDARY = "SECONDARY"  # 30% weight - Should-have requirements
+    TERTIARY = "TERTIARY"    # 10% weight - Nice-to-have requirements
+
+
 class Criterion(BaseModel):
     """Verification criterion result."""
 
     name: str
-    type: str  # PRIMARY or SECONDARY
+    type: str  # PRIMARY, SECONDARY, or TERTIARY
     status: str  # PASS, FAIL, PARTIAL
     detail: str
-    weight: float  # 0-1
+    weight: float  # 0-1 (relative weight within its type)
 
 
 class PFISignal(BaseModel):
@@ -81,7 +88,12 @@ class VerificationLane(ABC):
     def calculate_overall_score(
         self, criteria: list[Criterion], pfi_signals: list[PFISignal]
     ) -> float:
-        """Calculate overall score from criteria results.
+        """Calculate overall score from criteria results using 60-30-10 weighting.
+
+        Scoring Formula:
+        - PRIMARY criteria: 60% of total score
+        - SECONDARY criteria: 30% of total score
+        - TERTIARY criteria: 10% of total score
 
         Args:
             criteria: List of criterion results
@@ -90,22 +102,41 @@ class VerificationLane(ABC):
         Returns:
             Overall score (0-100)
         """
-        total_weight = 0.0
-        weighted_score = 0.0
+        # Group criteria by type
+        primary_criteria = [c for c in criteria if c.type == CriterionType.PRIMARY]
+        secondary_criteria = [c for c in criteria if c.type == CriterionType.SECONDARY]
+        tertiary_criteria = [c for c in criteria if c.type == CriterionType.TERTIARY]
 
-        for criterion in criteria:
-            if criterion.type == "PRIMARY":
-                total_weight += criterion.weight
+        def calculate_type_score(type_criteria: list[Criterion]) -> float:
+            """Calculate score for a specific criterion type."""
+            if not type_criteria:
+                return 1.0  # Full score if no criteria of this type
+
+            total_weight = sum(c.weight for c in type_criteria)
+            if total_weight == 0:
+                return 1.0
+
+            weighted_score = 0.0
+            for criterion in type_criteria:
                 if criterion.status == "PASS":
                     weighted_score += criterion.weight
                 elif criterion.status == "PARTIAL":
                     weighted_score += criterion.weight * 0.5
+                # FAIL contributes 0
 
-        # Normalize score to 0-100
-        if total_weight > 0:
-            base_score = (weighted_score / total_weight) * 100
-        else:
-            base_score = 0.0
+            return weighted_score / total_weight
+
+        # Calculate scores for each type (0-1 scale)
+        primary_score = calculate_type_score(primary_criteria)
+        secondary_score = calculate_type_score(secondary_criteria)
+        tertiary_score = calculate_type_score(tertiary_criteria)
+
+        # Apply 60-30-10 weighting (result is 0-100)
+        base_score = (
+            primary_score * 60 +      # 60% weight for PRIMARY
+            secondary_score * 30 +    # 30% weight for SECONDARY
+            tertiary_score * 10       # 10% weight for TERTIARY
+        )
 
         # PFI signals can slightly reduce score (warnings)
         warning_count = sum(1 for signal in pfi_signals if signal.status == "WARNING")

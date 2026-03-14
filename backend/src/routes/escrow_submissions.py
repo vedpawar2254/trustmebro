@@ -7,8 +7,8 @@ import httpx
 
 from src.database import get_db
 from src.models import (
-    Job, JobStatus, Escrow, EscrowStatus, Submission, SubmissionStatus,
-    User, JobSpec, Bid, BidStatus
+    Job, JobStatus, Escrow, EscrowStatus, EscrowRelease, Submission, SubmissionStatus,
+    User, JobSpec, Bid, BidStatus, ChatChannel, ChatMessage, MessageSender
 )
 from src.schemas import (
     FundEscrowRequest, CreateSubmissionRequest, ResubmitRequest,
@@ -17,6 +17,9 @@ from src.schemas import (
 from src.utils.logger import api_logger
 from src.auth import decode_access_token
 from src.config import settings
+from src.services.email_service import email_service
+from src.utils.enforcement import enforce_escrow_requirements, enforce_submission_requirements
+from src.utils.deadline import deadline_enforcer
 
 
 router = APIRouter(prefix="/api/jobs", tags=["escrow", "submissions"])
@@ -54,6 +57,13 @@ async def fund_escrow(
     if current_user.get("role") != "employer":
         raise HTTPException(status_code=403, detail="Only employers can fund escrow")
 
+    # Get user and enforce requirements (email verified, PFI >= 20)
+    user = db.query(User).filter(User.id == current_user["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    enforce_escrow_requirements(user, db)
+
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -75,24 +85,73 @@ async def fund_escrow(
             detail=f"Escrow amount must be at least the minimum budget: ${job.budget_min}"
         )
 
+    # Calculate platform fee (10%)
+    platform_fee = round(escrow_data.amount * 0.10, 2)
+    total_funded = round(escrow_data.amount + platform_fee, 2)
+
     new_escrow = Escrow(
         job_id=job_id,
         amount=escrow_data.amount,
+        platform_fee=platform_fee,
+        total_funded=total_funded,
+        released_amount=0.0,
         status=EscrowStatus.FUNDED,
         funded_at=datetime.utcnow(),
     )
     db.add(new_escrow)
 
     job.status = JobStatus.ESCROW_FUNDED
+
+    # Send Bro message about escrow funding
+    channel = db.query(ChatChannel).filter(ChatChannel.job_id == job_id).first()
+    if channel:
+        # Get freelancer name
+        freelancer = db.query(User).filter(User.id == job.assigned_freelancer_id).first()
+        freelancer_name = freelancer.name if freelancer else "Freelancer"
+
+        # Get first milestone name
+        spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
+        first_milestone = spec.milestones_json[0] if spec and spec.milestones_json else {"name": "First milestone"}
+
+        bro_message = ChatMessage(
+            channel_id=channel.id,
+            sender_id=None,
+            sender_type=MessageSender.AI_MEDIATOR,
+            content=f"""💰 Escrow funded!
+
+The employer has funded ${escrow_data.amount:.2f} to escrow. The project is ready to begin!
+
+{freelancer_name}, you can now start working on Milestone 1: {first_milestone.get('name', 'First deliverable')}
+Deadline: {job.deadline.strftime('%B %d, %Y') if job.deadline else 'TBD'}
+
+Good luck! 🚀""",
+            is_ai_generated=True,
+            ai_intervention_type="escrow_funded",
+        )
+        db.add(bro_message)
+
     db.commit()
     db.refresh(new_escrow)
 
-    api_logger.info(f"Escrow {new_escrow.id} funded for job {job_id} with ${escrow_data.amount}")
+    # Send email notification to freelancer
+    freelancer = db.query(User).filter(User.id == job.assigned_freelancer_id).first()
+    if freelancer:
+        email_service.send_escrow_funded_notification(
+            to_email=freelancer.email,
+            freelancer_name=freelancer.name,
+            job_title=job.title,
+            job_id=job_id,
+            amount=escrow_data.amount
+        )
+
+    api_logger.info(f"Escrow {new_escrow.id} funded for job {job_id} with ${escrow_data.amount} (fee: ${platform_fee})")
 
     return SuccessResponse(data={
         "escrow_id": new_escrow.id,
         "job_id": job_id,
         "amount": new_escrow.amount,
+        "platform_fee": new_escrow.platform_fee,
+        "total_funded": new_escrow.total_funded,
         "currency": new_escrow.currency,
         "status": new_escrow.status.value,
         "funded_at": new_escrow.funded_at.isoformat(),
@@ -122,15 +181,31 @@ async def get_escrow_status(
     if not escrow:
         raise HTTPException(status_code=404, detail="Escrow not found")
 
+    # Get milestone releases
+    releases = db.query(EscrowRelease).filter(EscrowRelease.escrow_id == escrow.id).all()
+    release_list = [
+        {
+            "milestone_id": r.milestone_id,
+            "amount": r.amount,
+            "released_at": r.released_at.isoformat() if r.released_at else None,
+        }
+        for r in releases
+    ]
+
     return SuccessResponse(data={
         "escrow_id": escrow.id,
         "job_id": job_id,
         "amount": escrow.amount,
+        "platform_fee": escrow.platform_fee,
+        "total_funded": escrow.total_funded,
+        "released_amount": escrow.released_amount,
+        "pending_amount": round(escrow.amount - escrow.released_amount, 2),
         "currency": escrow.currency,
         "status": escrow.status.value,
         "funded_at": escrow.funded_at.isoformat() if escrow.funded_at else None,
         "released_at": escrow.released_at.isoformat() if escrow.released_at else None,
         "refunded_at": escrow.refunded_at.isoformat() if escrow.refunded_at else None,
+        "releases": release_list,
     })
 
 
@@ -256,6 +331,13 @@ async def submit_work(
     if current_user.get("role") != "freelancer":
         raise HTTPException(status_code=403, detail="Only freelancers can submit work")
 
+    # Get user and enforce requirements (email verified, PFI >= 20)
+    user = db.query(User).filter(User.id == current_user["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    enforce_submission_requirements(user, db)
+
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -266,6 +348,11 @@ async def submit_work(
 
     if job.status not in [JobStatus.ESCROW_FUNDED, JobStatus.IN_PROGRESS]:
         raise HTTPException(status_code=400, detail="Job is not in a submittable state")
+
+    # Check deadline (with grace period)
+    can_submit, reason = deadline_enforcer.can_submit_work(job, db)
+    if not can_submit:
+        raise HTTPException(status_code=400, detail=f"Cannot submit work: {reason}")
 
     # Check if there's already a pending submission for this milestone
     existing = db.query(Submission).filter(
@@ -301,6 +388,29 @@ async def submit_work(
     db.refresh(new_submission)
 
     api_logger.info(f"Submission {new_submission.id} created for job {job_id}, milestone {submission_data.milestone_id}")
+
+    # Send email notification to employer
+    employer = db.query(User).filter(User.id == job.employer_id).first()
+    freelancer = db.query(User).filter(User.id == current_user["user_id"]).first()
+    spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
+
+    # Get milestone name
+    milestone_name = submission_data.milestone_id
+    if spec and spec.milestones_json:
+        for m in spec.milestones_json:
+            if str(m.get("id")) == str(submission_data.milestone_id) or str(m.get("order")) == str(submission_data.milestone_id):
+                milestone_name = m.get("name", submission_data.milestone_id)
+                break
+
+    if employer and freelancer:
+        email_service.send_submission_notification(
+            to_email=employer.email,
+            employer_name=employer.name,
+            freelancer_name=freelancer.name,
+            job_title=job.title,
+            job_id=job_id,
+            milestone_name=milestone_name
+        )
 
     return SuccessResponse(data={
         "submission_id": new_submission.id,
@@ -518,25 +628,77 @@ async def verify_submission(
 
     db.commit()
 
-    # Handle auto-release if all milestones verified with ≥90%
-    if payment_decision == "AUTO_RELEASE" and overall_score >= 90:
-        # Check if all milestones are verified
-        all_verified = _check_all_milestones_verified(job_id, spec, db)
+    # Auto-release payment for this milestone if score >= 90
+    payment_released = False
+    release_amount = 0.0
 
-        if all_verified:
-            escrow = db.query(Escrow).filter(Escrow.job_id == job_id).first()
-            if escrow and escrow.status == EscrowStatus.FUNDED:
+    if overall_score >= 90:
+        escrow = db.query(Escrow).filter(Escrow.job_id == job_id).first()
+        if escrow and escrow.status in [EscrowStatus.FUNDED, EscrowStatus.HELD]:
+            # Calculate milestone payout
+            milestones = spec.milestones_json if spec else []
+            release_amount = _calculate_milestone_payout(escrow.amount, milestones, submission.milestone_id)
+
+            # Create release record
+            release = EscrowRelease(
+                escrow_id=escrow.id,
+                milestone_id=submission.milestone_id,
+                amount=release_amount,
+                released_at=datetime.utcnow(),
+            )
+            db.add(release)
+
+            # Update escrow released amount
+            escrow.released_amount = round(escrow.released_amount + release_amount, 2)
+            payment_released = True
+
+            # Get freelancer name for message
+            freelancer_name = freelancer.name if freelancer else "Freelancer"
+
+            # Find milestone name
+            milestone_name = submission.milestone_id
+            for m in milestones:
+                if str(m.get("id")) == str(submission.milestone_id) or str(m.get("order")) == str(submission.milestone_id):
+                    milestone_name = m.get("name", submission.milestone_id)
+                    break
+
+            # Send payment release message
+            channel = db.query(ChatChannel).filter(ChatChannel.job_id == job_id).first()
+            if channel:
+                bro_message = ChatMessage(
+                    channel_id=channel.id,
+                    sender_id=None,
+                    sender_type=MessageSender.AI_MEDIATOR,
+                    content=f"""💰 Payment Released!
+
+Milestone: {milestone_name} has been verified (Score: {overall_score}%) and payment of ${release_amount:.2f} has been released to {freelancer_name}.
+
+Great work! 🎉""",
+                    is_ai_generated=True,
+                    ai_intervention_type="payment_released",
+                )
+                db.add(bro_message)
+
+            # Check if all milestones are now verified (job completion)
+            all_verified = _check_all_milestones_verified(job_id, spec, db)
+
+            if all_verified:
                 escrow.status = EscrowStatus.RELEASED
                 escrow.released_at = datetime.utcnow()
                 job.status = JobStatus.COMPLETED
                 job.completed_at = datetime.utcnow()
 
-                # Bonus PFI for auto-release
+                # Bonus PFI for full completion
                 if freelancer:
                     freelancer.pfi_score = min(100.0, freelancer.pfi_score + 1.0)
 
-                db.commit()
-                api_logger.info(f"Auto-released escrow for job {job_id}")
+                # Send completion message
+                if channel:
+                    _send_completion_message(channel, job, escrow, freelancer, db)
+
+                api_logger.info(f"Job {job_id} completed - all milestones verified")
+
+    db.commit()
 
     api_logger.info(f"Submission {submission_id} verified with score {overall_score}")
 
@@ -545,6 +707,8 @@ async def verify_submission(
         "status": submission.status.value,
         "verification_score": overall_score,
         "payment_decision": payment_decision,
+        "payment_released": payment_released,
+        "release_amount": release_amount if payment_released else None,
         "verification_report": verification_data,
         "verified_at": submission.verified_at.isoformat(),
     })
@@ -633,22 +797,86 @@ async def resubmit_work(
 
 
 def _check_all_milestones_verified(job_id: int, spec: JobSpec, db: Session) -> bool:
-    """Check if all milestones have been verified with ≥90% score."""
-    milestones = spec.milestones_json or []
-    if not milestones:
+    """Check if all milestones have been verified."""
+    if not spec or not spec.milestones_json:
         return False
 
-    for milestone in milestones:
-        milestone_id = milestone.get("id") or str(milestone.get("order"))
+    milestones = spec.milestones_json
 
-        # Find the best submission for this milestone
-        best_submission = db.query(Submission).filter(
+    for milestone in milestones:
+        milestone_id = str(milestone.get("id") or milestone.get("order"))
+
+        # Find verified submission for this milestone
+        verified_submission = db.query(Submission).filter(
             Submission.job_id == job_id,
             Submission.milestone_id == milestone_id,
             Submission.status == SubmissionStatus.VERIFIED
         ).first()
 
-        if not best_submission or (best_submission.verification_score or 0) < 90:
+        if not verified_submission:
             return False
 
     return True
+
+
+def _calculate_milestone_payout(total_budget: float, milestones: list, milestone_id: str) -> float:
+    """
+    Calculate payout for a specific milestone.
+
+    Distribution: Equal split with 1.5x on final milestone.
+    """
+    count = len(milestones)
+    if count == 0:
+        return 0.0
+
+    if count == 1:
+        return total_budget
+
+    # Find milestone index
+    milestone_index = -1
+    for i, m in enumerate(milestones):
+        if str(m.get("id")) == str(milestone_id) or str(m.get("order")) == str(milestone_id):
+            milestone_index = i
+            break
+
+    if milestone_index == -1:
+        # Milestone not found, return equal split
+        return round(total_budget / count, 2)
+
+    # Calculate base amount (final gets 1.5x)
+    base = total_budget / (count + 0.5)
+
+    is_final = milestone_index == count - 1
+    return round(base * 1.5 if is_final else base, 2)
+
+
+def _send_completion_message(channel: ChatChannel, job: Job, escrow: Escrow, freelancer: User, db: Session):
+    """Send job completion message via Bro."""
+    employer = db.query(User).filter(User.id == job.employer_id).first()
+    employer_name = employer.name if employer else "Employer"
+    freelancer_name = freelancer.name if freelancer else "Freelancer"
+
+    # Calculate days taken
+    days_taken = 0
+    if job.assigned_at and job.completed_at:
+        days_taken = (job.completed_at - job.assigned_at).days
+
+    completion_message = ChatMessage(
+        channel_id=channel.id,
+        sender_id=None,
+        sender_type=MessageSender.AI_MEDIATOR,
+        content=f"""🎉 Project Complete!
+
+All milestones have been verified and payments released.
+
+Great job, {employer_name} and {freelancer_name}!
+
+Final stats:
+- Total paid: ${escrow.amount:.2f}
+- Completed in: {days_taken} days
+
+Thanks for using TrustMeBro! 🤙""",
+        is_ai_generated=True,
+        ai_intervention_type="job_completed",
+    )
+    db.add(completion_message)

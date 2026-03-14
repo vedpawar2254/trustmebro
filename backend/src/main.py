@@ -19,7 +19,8 @@ from src.auth import (
     decode_access_token,
 )
 from src.utils.logger import api_logger
-from src.routes import jobs, verify, escrow_submissions, auth, uploads, chat
+from src.routes import jobs, verify, escrow_submissions, auth, uploads, chat, payments, change_requests, disputes, dashboard
+from src.services.email_service import email_service
 
 
 main_logger = api_logger
@@ -51,6 +52,10 @@ app.include_router(verify.router)
 app.include_router(escrow_submissions.router)
 app.include_router(uploads.router)
 app.include_router(chat.router)
+app.include_router(payments.router)
+app.include_router(change_requests.router)
+app.include_router(disputes.router)
+app.include_router(dashboard.router)
 
 
 @app.on_event("startup")
@@ -142,8 +147,13 @@ async def register(
     db.commit()
     db.refresh(new_user)
 
-    # Log verification token for development
-    main_logger.info(f"Verification token for {new_user.email}: {verification_token}")
+    # Send verification email
+    email_service.send_verification_email(
+        to_email=new_user.email,
+        name=new_user.name,
+        token=verification_token
+    )
+    main_logger.info(f"Verification email sent to {new_user.email}")
 
     # Generate token
     token = create_access_token({"user_id": new_user.id, "role": new_user.role.value})

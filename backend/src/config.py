@@ -33,6 +33,17 @@ class Settings:
     # AI Engine Configuration
     ai_engine_url: str = os.getenv("AI_ENGINE_URL", "http://localhost:3002")
 
+    # Frontend URL (for email links)
+    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    # Email Configuration
+    smtp_host: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str = os.getenv("SMTP_USERNAME", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    email_from: str = os.getenv("EMAIL_FROM", "noreply@trustmebro.com")
+    email_from_name: str = os.getenv("EMAIL_FROM_NAME", "TrustMeBro")
+
     # Project Configuration
     base_dir: Path = Path(__file__).parent.parent
     src_dir: Path = Path(__file__).parent

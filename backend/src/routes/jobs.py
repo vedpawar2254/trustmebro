@@ -7,6 +7,7 @@ import httpx
 
 from src.database import get_db
 from src.models import Job, JobStatus, JobSpec, Bid, BidStatus, User, GigType, ChatChannel
+from src.services.email_service import email_service
 from src.schemas import (
     CreateJobRequest, JobSpecUpdate, CreateBidRequest, AssignFreelancerRequest,
     SuccessResponse, PaginatedResponse
@@ -14,6 +15,7 @@ from src.schemas import (
 from src.utils.logger import api_logger
 from src.auth import decode_access_token
 from src.config import settings
+from src.utils.enforcement import enforce_bidding_requirements
 
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -84,8 +86,13 @@ def format_job_response(job: Job, db: Session, include_spec: bool = False) -> di
                 "version": spec.version,
                 "is_locked": spec.is_locked,
                 "locked_at": spec.locked_at.isoformat() if spec.locked_at else None,
+                "employer_locked_at": spec.employer_locked_at.isoformat() if spec.employer_locked_at else None,
+                "freelancer_locked_at": spec.freelancer_locked_at.isoformat() if spec.freelancer_locked_at else None,
                 "milestones": spec.milestones_json,
+                "requirements": spec.requirements_json,
+                "deliverables": spec.deliverables_json,
                 "required_assets": spec.required_assets_json,
+                "verification_policy": spec.verification_policy,
                 "created_at": spec.created_at.isoformat(),
             }
 
@@ -296,7 +303,10 @@ async def generate_job_spec(
     new_spec = JobSpec(
         job_id=job_id,
         milestones_json=spec_data.get("milestones", []),
+        requirements_json=spec_data.get("requirements", {"primary": [], "secondary": [], "tertiary": []}),
+        deliverables_json=spec_data.get("deliverables", []),
         required_assets_json=spec_data.get("required_assets", []),
+        verification_policy=spec_data.get("verification_policy", "standard"),
         version=1,
         is_locked=False,
     )
@@ -323,7 +333,10 @@ async def generate_job_spec(
         "gig_type": job.gig_type.value if job.gig_type else None,
         "gig_subtype": job.gig_subtype,
         "milestones": new_spec.milestones_json,
+        "requirements": new_spec.requirements_json,
+        "deliverables": new_spec.deliverables_json,
         "required_assets": new_spec.required_assets_json,
+        "verification_policy": new_spec.verification_policy,
         "version": new_spec.version,
         "is_locked": new_spec.is_locked,
         "vague_items": spec_data.get("vague_items", []),
@@ -357,8 +370,15 @@ async def update_job_spec(
     # Update spec
     if spec_data.milestones is not None:
         spec.milestones_json = spec_data.milestones
+    if spec_data.requirements is not None:
+        spec.requirements_json = spec_data.requirements
+    if spec_data.deliverables is not None:
+        spec.deliverables_json = spec_data.deliverables
     if spec_data.required_assets is not None:
         spec.required_assets_json = spec_data.required_assets
+    if spec_data.verification_policy is not None:
+        if spec_data.verification_policy in ["strict", "standard", "flexible", "trust_based"]:
+            spec.verification_policy = spec_data.verification_policy
 
     spec.version += 1
     spec.updated_at = datetime.utcnow()
@@ -373,6 +393,11 @@ async def update_job_spec(
         "job_id": job_id,
         "version": spec.version,
         "is_locked": spec.is_locked,
+        "milestones": spec.milestones_json,
+        "requirements": spec.requirements_json,
+        "deliverables": spec.deliverables_json,
+        "required_assets": spec.required_assets_json,
+        "verification_policy": spec.verification_policy,
     })
 
 
@@ -382,15 +407,24 @@ async def lock_job_spec(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Lock the job spec (makes it immutable). Employer only."""
+    """
+    Lock the job spec (requires both parties to confirm).
+
+    Each party calls this endpoint to confirm their agreement.
+    Spec is fully locked when both have confirmed.
+    """
     current_user = require_auth(request)
 
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if job.employer_id != current_user["user_id"]:
-        raise HTTPException(status_code=403, detail="You are not the owner of this job")
+    # Check if user is employer or assigned freelancer
+    is_employer = job.employer_id == current_user["user_id"]
+    is_freelancer = job.assigned_freelancer_id == current_user["user_id"]
+
+    if not (is_employer or is_freelancer):
+        raise HTTPException(status_code=403, detail="You don't have access to this job")
 
     spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
     if not spec:
@@ -399,16 +433,92 @@ async def lock_job_spec(
     if spec.is_locked:
         raise HTTPException(status_code=400, detail="Spec is already locked")
 
-    spec.is_locked = True
-    spec.locked_at = datetime.utcnow()
+    now = datetime.utcnow()
+
+    # Record this party's confirmation
+    if is_employer:
+        if spec.employer_locked_at:
+            raise HTTPException(status_code=400, detail="Employer already confirmed lock")
+        spec.employer_locked_at = now
+    else:
+        if spec.freelancer_locked_at:
+            raise HTTPException(status_code=400, detail="Freelancer already confirmed lock")
+        spec.freelancer_locked_at = now
+
+    # Check if both parties have confirmed
+    both_confirmed = spec.employer_locked_at is not None and spec.freelancer_locked_at is not None
+
+    if both_confirmed:
+        spec.is_locked = True
+        spec.locked_at = now
+        api_logger.info(f"Spec {spec.id} fully locked for job {job_id}")
+
+        # Send Bro message about spec lock
+        channel = db.query(ChatChannel).filter(ChatChannel.job_id == job_id).first()
+        if channel:
+            from src.models import ChatMessage, MessageSender
+            lock_message = ChatMessage(
+                channel_id=channel.id,
+                sender_id=None,
+                sender_type=MessageSender.AI_MEDIATOR,
+                content=f"""📋 Spec Locked!
+
+Both parties have agreed to the spec. The project terms are now locked.
+
+Next step: The employer can fund the escrow to start the project.
+
+Any changes from this point forward will require formal change requests.""",
+                is_ai_generated=True,
+                ai_intervention_type="spec_locked",
+            )
+            db.add(lock_message)
+
     db.commit()
 
-    api_logger.info(f"Locked spec {spec.id} for job {job_id}")
-
     return SuccessResponse(
-        data={"spec_id": spec.id, "is_locked": True, "locked_at": spec.locked_at.isoformat()},
-        message="Spec locked successfully"
+        data={
+            "spec_id": spec.id,
+            "is_locked": spec.is_locked,
+            "employer_confirmed": spec.employer_locked_at is not None,
+            "freelancer_confirmed": spec.freelancer_locked_at is not None,
+            "locked_at": spec.locked_at.isoformat() if spec.locked_at else None,
+        },
+        message="Spec locked successfully" if both_confirmed else f"{'Employer' if is_employer else 'Freelancer'} confirmation recorded. Waiting for other party."
     )
+
+
+@router.get("/{job_id}/spec/lock-status", response_model=SuccessResponse)
+async def get_spec_lock_status(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Get the current spec lock status."""
+    current_user = require_auth(request)
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Check if user has access
+    is_employer = job.employer_id == current_user["user_id"]
+    is_freelancer = job.assigned_freelancer_id == current_user["user_id"]
+
+    if not (is_employer or is_freelancer):
+        raise HTTPException(status_code=403, detail="You don't have access to this job")
+
+    spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
+    if not spec:
+        raise HTTPException(status_code=404, detail="Spec not found")
+
+    return SuccessResponse(data={
+        "is_locked": spec.is_locked,
+        "employer_confirmed": spec.employer_locked_at is not None,
+        "freelancer_confirmed": spec.freelancer_locked_at is not None,
+        "employer_confirmed_at": spec.employer_locked_at.isoformat() if spec.employer_locked_at else None,
+        "freelancer_confirmed_at": spec.freelancer_locked_at.isoformat() if spec.freelancer_locked_at else None,
+        "locked_at": spec.locked_at.isoformat() if spec.locked_at else None,
+    })
 
 
 # ============== PUBLISHING ==============
@@ -503,6 +613,13 @@ async def create_bid(
     if current_user.get("role") != "freelancer":
         raise HTTPException(status_code=403, detail="Only freelancers can place bids")
 
+    # Get user and enforce requirements (email verified, PFI >= 20)
+    user = db.query(User).filter(User.id == current_user["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    enforce_bidding_requirements(user, db)
+
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -533,6 +650,18 @@ async def create_bid(
     db.refresh(new_bid)
 
     api_logger.info(f"Created bid {new_bid.id} for job {job_id} by freelancer {current_user['user_id']}")
+
+    # Send email notification to employer
+    employer = db.query(User).filter(User.id == job.employer_id).first()
+    freelancer = db.query(User).filter(User.id == current_user["user_id"]).first()
+    if employer and freelancer:
+        email_service.send_bid_notification(
+            to_email=employer.email,
+            employer_name=employer.name,
+            freelancer_name=freelancer.name,
+            job_title=job.title,
+            job_id=job_id
+        )
 
     return SuccessResponse(data={
         "bid_id": new_bid.id,
@@ -648,6 +777,18 @@ async def assign_freelancer(
     db.commit()
 
     api_logger.info(f"Job {job_id} assigned to freelancer {assignment_data.freelancer_id}")
+
+    # Send email notification to freelancer
+    freelancer = db.query(User).filter(User.id == assignment_data.freelancer_id).first()
+    employer = db.query(User).filter(User.id == job.employer_id).first()
+    if freelancer and employer:
+        email_service.send_assignment_notification(
+            to_email=freelancer.email,
+            freelancer_name=freelancer.name,
+            job_title=job.title,
+            job_id=job_id,
+            employer_name=employer.name
+        )
 
     return SuccessResponse(data={
         "job_id": job_id,

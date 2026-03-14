@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src.models import (
-    Job, JobStatus, ChatChannel, ChatMessage, MessageSender, User
+    Job, JobStatus, JobSpec, ChatChannel, ChatMessage, MessageSender, User
 )
 from src.schemas import SendMessageRequest, ChatChannelResponse, ChatMessageResponse, SuccessResponse
+from src.services.bro_mediator import bro_mediator
 from src.utils.logger import api_logger
 from src.auth import decode_access_token
 
@@ -82,12 +83,39 @@ async def create_or_get_chat_channel(
         db.commit()
         db.refresh(channel)
 
-        # Add a system message
+        # Get user names and spec info for welcome message
+        employer = db.query(User).filter(User.id == job.employer_id).first()
+        freelancer = db.query(User).filter(User.id == job.assigned_freelancer_id).first()
+        spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
+
+        employer_name = employer.name if employer else "Employer"
+        freelancer_name = freelancer.name if freelancer else "Freelancer"
+
+        # Build spec summary
+        milestone_count = len(spec.milestones_json) if spec and spec.milestones_json else 0
+        budget_display = f"${job.budget_min:.0f}" if job.budget_min == job.budget_max else f"${job.budget_min:.0f}-${job.budget_max:.0f}"
+        deadline_display = job.deadline.strftime('%B %d, %Y') if job.deadline else "TBD"
+
+        # Add Bro welcome message
         welcome_message = ChatMessage(
             channel_id=channel.id,
             sender_id=None,
             sender_type=MessageSender.AI_MEDIATOR,
-            content=f"Chat channel created for job: {job.title}. Please keep discussions on-topic and related to the job scope.",
+            content=f"""Hey {employer_name} and {freelancer_name}! Welcome to your project chat.
+
+I'm Bro, and I'll be here throughout the project to help with:
+- Clarifying the spec
+- Managing any changes
+- Keeping things on track
+
+Current spec summary:
+- {milestone_count} milestone(s)
+- Budget: {budget_display}
+- Deadline: {deadline_display}
+
+{freelancer_name}, please review the full spec and raise any concerns before {employer_name} funds the escrow.
+
+Good luck! 🤙""",
             is_ai_generated=True,
             ai_intervention_type="channel_created",
         )
@@ -261,14 +289,54 @@ async def send_chat_message(
         "content": new_message.content,
         "is_ai_generated": False,
         "created_at": new_message.created_at.isoformat(),
+        "bro_response": None,
     }
 
-    # TODO: Add AI mediator analysis here
-    # This would:
-    # 1. Analyze message for scope creep keywords
-    # 2. Check if message is requesting changes outside spec
-    # 3. Inject clarifying messages if needed
-    # 4. Log spec clarifications for future reference
+    # AI Mediator Analysis - Detect scope creep, answer questions, etc.
+    spec = db.query(JobSpec).filter(JobSpec.job_id == job_id).first()
+    job_spec_data = {
+        "milestones_json": spec.milestones_json if spec else [],
+        "requirements_json": spec.requirements_json if spec else {},
+        "deliverables_json": spec.deliverables_json if spec else [],
+        "is_locked": spec.is_locked if spec else False,
+    }
+
+    analysis = bro_mediator.analyze_message(
+        message_content=message_data.content,
+        job_spec=job_spec_data,
+        sender_role=current_user["role"],
+        recent_messages=None  # Could fetch recent messages for context
+    )
+
+    # If Bro should respond, create a follow-up message
+    if analysis["should_respond"] and analysis["response"]:
+        bro_message = ChatMessage(
+            channel_id=channel.id,
+            sender_id=None,
+            sender_type=MessageSender.AI_MEDIATOR,
+            content=analysis["response"],
+            is_ai_generated=True,
+            ai_intervention_type=analysis["intervention_type"],
+            metadata_json={
+                "triggered_by_message_id": new_message.id,
+                "detected_changes": analysis.get("detected_changes", []),
+                "confidence": analysis.get("confidence", 0.0),
+            }
+        )
+        db.add(bro_message)
+        db.commit()
+        db.refresh(bro_message)
+
+        api_logger.info(
+            f"Bro intervention ({analysis['intervention_type']}) in channel {channel.id}"
+        )
+
+        response_data["bro_response"] = {
+            "message_id": bro_message.id,
+            "content": bro_message.content,
+            "intervention_type": analysis["intervention_type"],
+            "created_at": bro_message.created_at.isoformat(),
+        }
 
     return SuccessResponse(data=response_data)
 

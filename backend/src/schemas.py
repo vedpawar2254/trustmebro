@@ -81,7 +81,10 @@ class CreateJobRequest(BaseModel):
 
 class JobSpecUpdate(BaseModel):
     milestones: Optional[List[dict]] = None
+    requirements: Optional[dict] = None  # {primary: [], secondary: [], tertiary: []}
+    deliverables: Optional[List[dict]] = None
     required_assets: Optional[List[dict]] = None
+    verification_policy: Optional[str] = None  # strict, standard, flexible, trust_based
 
 
 class JobResponse(BaseModel):

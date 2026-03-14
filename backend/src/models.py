@@ -157,6 +157,7 @@ class Job(Base):
     spec = relationship("JobSpec", back_populates="job", uselist=False, cascade="all, delete-orphan")
     chat_channel = relationship("ChatChannel", back_populates="job", uselist=False, cascade="all, delete-orphan")
     change_requests = relationship("ChangeRequest", back_populates="job", cascade="all, delete-orphan")
+    dispute = relationship("Dispute", back_populates="job", uselist=False, cascade="all, delete-orphan")
 
 
 class JobSpec(Base):
@@ -168,8 +169,13 @@ class JobSpec(Base):
     version = Column(Integer, default=1, nullable=False)
     is_locked = Column(Boolean, default=False, nullable=False)
     locked_at = Column(DateTime, default=None)
+    employer_locked_at = Column(DateTime, default=None)
+    freelancer_locked_at = Column(DateTime, default=None)
     milestones_json = Column(JSON, nullable=False, default=list)
+    requirements_json = Column(JSON, nullable=False, default=dict)  # {primary: [], secondary: [], tertiary: []}
+    deliverables_json = Column(JSON, nullable=False, default=list)
     required_assets_json = Column(JSON, nullable=False, default=list)
+    verification_policy = Column(String(50), default="standard", nullable=False)  # strict, standard, flexible, trust_based
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -202,6 +208,9 @@ class Escrow(Base):
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, unique=True, index=True)
     amount = Column(Float, nullable=False)
+    platform_fee = Column(Float, default=0.0, nullable=False)
+    total_funded = Column(Float, nullable=False)
+    released_amount = Column(Float, default=0.0, nullable=False)
     currency = Column(String(10), default="USD", nullable=False)
     status = Column(Enum(EscrowStatus), default=EscrowStatus.FUNDED, nullable=False)
     funded_at = Column(DateTime, default=None)
@@ -211,6 +220,21 @@ class Escrow(Base):
 
     # Relationships
     job = relationship("Job", back_populates="escrow")
+    releases = relationship("EscrowRelease", back_populates="escrow", cascade="all, delete-orphan")
+
+
+class EscrowRelease(Base):
+    """Escrow release record for milestone payments."""
+    __tablename__ = "escrow_releases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    escrow_id = Column(Integer, ForeignKey("escrows.id"), nullable=False, index=True)
+    milestone_id = Column(String(100), nullable=False)
+    amount = Column(Float, nullable=False)
+    released_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    escrow = relationship("Escrow", back_populates="releases")
 
 
 class Submission(Base):
@@ -226,9 +250,11 @@ class Submission(Base):
     file_urls = Column(JSON, default=None)
     text_content = Column(Text, default=None)
     source_document_url = Column(String(500), default=None)
+    notes = Column(Text, default=None)
     status = Column(Enum(SubmissionStatus), default=SubmissionStatus.PENDING, nullable=False, index=True)
     verification_score = Column(Float, default=None)
     verification_report_json = Column(JSON, default=None)
+    client_override = Column(Boolean, default=False, nullable=False)
     resubmission_count = Column(Integer, default=0, nullable=False)
     resubmissions_remaining = Column(Integer, default=2, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -292,3 +318,57 @@ class ChangeRequest(Base):
 
     # Relationships
     job = relationship("Job", back_populates="change_requests")
+
+
+class DisputeStatus(str, PyEnum):
+    """Dispute statuses."""
+    OPEN = "open"
+    UNDER_REVIEW = "under_review"
+    RESOLVED_EMPLOYER = "resolved_employer"  # Employer wins - refund
+    RESOLVED_FREELANCER = "resolved_freelancer"  # Freelancer wins - release
+    RESOLVED_SPLIT = "resolved_split"  # Split decision
+    WITHDRAWN = "withdrawn"
+
+
+class Dispute(Base):
+    """Dispute model for handling payment disputes."""
+    __tablename__ = "disputes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, unique=True, index=True)
+    initiated_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    initiated_by_role = Column(Enum(UserRole), nullable=False)
+    reason = Column(Text, nullable=False)
+    dispute_type = Column(String(50), nullable=False)  # quality, incomplete, non_delivery, scope_disagreement
+    evidence_json = Column(JSON, default=list)  # List of evidence URLs/descriptions
+    employer_statement = Column(Text, default=None)
+    freelancer_statement = Column(Text, default=None)
+    ai_recommendation = Column(Text, default=None)  # AI analysis of the dispute
+    ai_recommendation_json = Column(JSON, default=None)
+    status = Column(Enum(DisputeStatus), default=DisputeStatus.OPEN, nullable=False, index=True)
+    resolution_notes = Column(Text, default=None)
+    resolution_amount = Column(Float, default=None)  # Amount to release/refund
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, default=None)
+
+    # Relationships
+    job = relationship("Job", back_populates="dispute")
+
+
+class GhostEvent(Base):
+    """Ghost protocol events for tracking unresponsive users."""
+    __tablename__ = "ghost_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_role = Column(Enum(UserRole), nullable=False)
+    event_type = Column(String(50), nullable=False)  # warning_24h, warning_48h, warning_72h, ghost_7d
+    triggered_at = Column(DateTime, default=datetime.utcnow)
+    acknowledged_at = Column(DateTime, default=None)
+    pfi_penalty_applied = Column(Float, default=0.0)
+    is_resolved = Column(Boolean, default=False)
+
+    # Relationships
+    job = relationship("Job")
+    user = relationship("User")
