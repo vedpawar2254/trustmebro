@@ -1,11 +1,12 @@
 """SQLAlchemy database models."""
 from datetime import datetime
-from typing import Optional
+from enum import Enum as PyEnum
+from typing import Optional, List
 
 from sqlalchemy import (
     Column, Integer, String, Text, Float, Boolean, DateTime, Enum, ForeignKey, JSON
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 class Base(DeclarativeBase):
@@ -13,13 +14,14 @@ class Base(DeclarativeBase):
     pass
 
 
-class UserRole(str, Enum):
+# Python Enums for type safety
+class UserRole(str, PyEnum):
     """User roles."""
     EMPLOYER = "employer"
     FREELANCER = "freelancer"
 
 
-class JobStatus(str, Enum):
+class JobStatus(str, PyEnum):
     """Job statuses."""
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -30,7 +32,7 @@ class JobStatus(str, Enum):
     DISPUTED = "disputed"
 
 
-class GigType(str, Enum):
+class GigType(str, PyEnum):
     """Gig types."""
     SOFTWARE = "software"
     COPYWRITING = "copywriting"
@@ -38,7 +40,7 @@ class GigType(str, Enum):
     TRANSLATION = "translation"
 
 
-class GigSubtype(str, Enum):
+class GigSubtype(str, PyEnum):
     """Gig subtypes for each gig type."""
     # Software subtypes
     WEB_DEVELOPMENT = "web_development"
@@ -49,7 +51,7 @@ class GigSubtype(str, Enum):
     BLOCKCHAIN = "blockchain"
     DEVOPS = "devops"
     DATA_SCIENCE = "data_science"
-    
+
     # Copywriting subtypes
     BLOG_POSTS = "blog_posts"
     WEBSITE_COPY = "website_copy"
@@ -57,24 +59,24 @@ class GigSubtype(str, Enum):
     SOCIAL_MEDIA = "social_media"
     TECHNICAL_WRITING = "technical_writing"
     PRESS_RELEASES = "press_releases"
-    
+
     # Data Entry subtypes
     SPREADSHEET_DATA = "spreadsheet_data"
     DATABASE_ENTRY = "database_entry"
     WEB_SCRAPING = "web_scraping"
     FORM_PROCESSING = "form_processing"
     IMAGE_TRANSCRIPTION = "image_transcription"
-    
+
     # Translation subtypes
     DOCUMENT_TRANSLATION = "document_translation"
     WEBSITE_TRANSLATION = "website_translation"
     APP_TRANSLATION = "app_translation"
-    SUBTITLE_TRANSLATION = "subtitle_transSLATION"
+    SUBTITLE_TRANSLATION = "subtitle_translation"
     LEGAL_TRANSLATION = "legal_translation"
     TECHNICAL_TRANSLATION = "technical_translation"
 
 
-class BidStatus(str, Enum):
+class BidStatus(str, PyEnum):
     """Bid statuses."""
     PENDING = "pending"
     ACCEPTED = "accepted"
@@ -82,7 +84,7 @@ class BidStatus(str, Enum):
     WITHDRAWN = "withdrawn"
 
 
-class EscrowStatus(str, Enum):
+class EscrowStatus(str, PyEnum):
     """Escrow statuses."""
     FUNDED = "funded"
     HELD = "held"
@@ -90,17 +92,19 @@ class EscrowStatus(str, Enum):
     REFUNDED = "refunded"
 
 
-class CriterionType(str, Enum):
-    """Criterion types."""
-    PRIMARY = "PRIMARY"
-    SECONDARY = "SECONDARY"
-
-
-class VerificationStatus(str, Enum):
-    """Verification status."""
-    PASS = "pass"
-    FAIL = "fail"
+class SubmissionStatus(str, PyEnum):
+    """Submission verification statuses."""
+    PENDING = "pending"
+    VERIFIED = "verified"
     PARTIAL = "partial"
+    FAILED = "failed"
+
+
+class MessageSender(str, PyEnum):
+    """Message sender types."""
+    EMPLOYER = "employer"
+    FREELANCER = "freelancer"
+    AI_MEDIATOR = "ai_mediator"
 
 
 class User(Base):
@@ -118,7 +122,8 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    jobs = relationship("Job", back_populates="employer")
+    employer_jobs = relationship("Job", back_populates="employer", foreign_keys="Job.employer_id")
+    freelancer_jobs = relationship("Job", back_populates="assigned_freelancer", foreign_keys="Job.assigned_freelancer_id")
     bids = relationship("Bid", back_populates="freelancer")
     submissions = relationship("Submission", back_populates="freelancer")
 
@@ -129,83 +134,44 @@ class Job(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     employer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assigned_freelancer_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=False)
-    gig_type = Column(Enum(GigType), nullable=False, index=True)
-    gig_subtype = Column(String(100))
+    gig_type = Column(Enum(GigType), nullable=True, index=True)
+    gig_subtype = Column(String(100), nullable=True)
     budget_min = Column(Float, nullable=False)
     budget_max = Column(Float, nullable=False)
     deadline = Column(DateTime, nullable=False)
     status = Column(Enum(JobStatus), default=JobStatus.DRAFT, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     published_at = Column(DateTime, default=None)
-    spec_locked_at = Column(DateTime, default=None)
+    assigned_at = Column(DateTime, default=None)
+    completed_at = Column(DateTime, default=None)
 
     # Relationships
-    employer = relationship("User", back_populates="jobs")
-    bids = relationship("Bid", back_populates="job")
-    submissions = relationship("Submission", back_populates="job")
-    escrow = relationship("Escrow", back_populates="job", uselist=False)
-    spec = relationship("JobSpec", back_populates="job", uselist=False)
-    chat_channel = relationship("ChatChannel", back_populates="job", uselist=False)
-    change_requests = relationship("ChangeRequest", back_populates="job", uselist=False)
-
-
-class MilestoneCriterion(Base):
-    """Milestone criterion model."""
-    __tablename__ = "milestone_criteria"
-
-    id = Column(Integer, primary_key=True, index=True)
-    job_spec_id = Column(Integer, ForeignKey("job_specs.id"), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=False)
-    criterion_type = Column(Enum(CriterionType), nullable=False)
-    verification_status = Column(Enum(VerificationStatus), default="pending", nullable=False)
-    is_verifiable = Column(Boolean, default=True, nullable=False)
-    is_vague = Column(Boolean, default=False, nullable=False)
-    vague_resolved = Column(Boolean, default=False, nullable=False)
-    weight = Column(Float, default=0.1, nullable=False)
-
-
-class RequiredAsset(Base):
-    """Required asset model."""
-    __tablename__ = "required_assets"
-
-    id = Column(Integer, primary_key=True, index=True)
-    job_spec_id = Column(Integer, ForeignKey("job_specs.id"), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=False)
-    is_delivered = Column(Boolean, default=False, nullable=False)
-    delivered_at = Column(DateTime, default=None)
-
-
-class Milestone(Base):
-    """Milestone model."""
-    __tablename__ = "milestones"
-
-    id = Column(Integer, primary_key=True, index=True)
-    job_spec_id = Column(Integer, ForeignKey("job_specs.id"), nullable=False, index=True)
-    order = Column(Integer, nullable=False)
-    title = Column(String(500), nullable=False)
-    deadline = Column(DateTime, nullable=False)
-
-    # Relationships
-    job_spec = relationship("JobSpec", back_populates="milestones")
-    criteria = relationship("MilestoneCriterion", back_populates="milestone")
-    submission_requirements = relationship("SubmissionRequirement", back_populates="milestone", uselist=False)
+    employer = relationship("User", back_populates="employer_jobs", foreign_keys=[employer_id])
+    assigned_freelancer = relationship("User", back_populates="freelancer_jobs", foreign_keys=[assigned_freelancer_id])
+    bids = relationship("Bid", back_populates="job", cascade="all, delete-orphan")
+    submissions = relationship("Submission", back_populates="job", cascade="all, delete-orphan")
+    escrow = relationship("Escrow", back_populates="job", uselist=False, cascade="all, delete-orphan")
+    spec = relationship("JobSpec", back_populates="job", uselist=False, cascade="all, delete-orphan")
+    chat_channel = relationship("ChatChannel", back_populates="job", uselist=False, cascade="all, delete-orphan")
+    change_requests = relationship("ChangeRequest", back_populates="job", cascade="all, delete-orphan")
 
 
 class JobSpec(Base):
     """Job specification model."""
     __tablename__ = "job_specs"
 
-    id = Column(Integer, primary_key=True)
-    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, unique=True, index=True)
     version = Column(Integer, default=1, nullable=False)
     is_locked = Column(Boolean, default=False, nullable=False)
-    milestones_json = Column(JSON, nullable=False)
-    required_assets_json = Column(JSON, nullable=False)
+    locked_at = Column(DateTime, default=None)
+    milestones_json = Column(JSON, nullable=False, default=list)
+    required_assets_json = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     job = relationship("Job", back_populates="spec")
@@ -224,20 +190,27 @@ class Bid(Base):
     status = Column(Enum(BidStatus), default=BidStatus.PENDING, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Relationships
+    job = relationship("Job", back_populates="bids")
+    freelancer = relationship("User", back_populates="bids")
+
 
 class Escrow(Base):
     """Escrow model."""
     __tablename__ = "escrows"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, unique=True, index=True)
     amount = Column(Float, nullable=False)
-    currency = Column(String(10), default="USD")
+    currency = Column(String(10), default="USD", nullable=False)
     status = Column(Enum(EscrowStatus), default=EscrowStatus.FUNDED, nullable=False)
     funded_at = Column(DateTime, default=None)
     released_at = Column(DateTime, default=None)
     refunded_at = Column(DateTime, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    job = relationship("Job", back_populates="escrow")
 
 
 class Submission(Base):
@@ -253,12 +226,18 @@ class Submission(Base):
     file_urls = Column(JSON, default=None)
     text_content = Column(Text, default=None)
     source_document_url = Column(String(500), default=None)
-    status = Column(String(50), default="pending", nullable=False, index=True)
+    status = Column(Enum(SubmissionStatus), default=SubmissionStatus.PENDING, nullable=False, index=True)
+    verification_score = Column(Float, default=None)
     verification_report_json = Column(JSON, default=None)
-    resubmission_count = Column(Integer, default=0)
-    resubmissions_remaining = Column(Integer, default=2)
+    resubmission_count = Column(Integer, default=0, nullable=False)
+    resubmissions_remaining = Column(Integer, default=2, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    verified_at = Column(DateTime, default=None)
+
+    # Relationships
+    job = relationship("Job", back_populates="submissions")
+    freelancer = relationship("User", back_populates="submissions")
 
 
 class ChatChannel(Base):
@@ -266,11 +245,33 @@ class ChatChannel(Base):
     __tablename__ = "chat_channels"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, unique=True, index=True)
     employer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     freelancer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    job = relationship("Job", back_populates="chat_channel")
+    messages = relationship("ChatMessage", back_populates="channel", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
+
+
+class ChatMessage(Base):
+    """Chat message model."""
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("chat_channels.id"), nullable=False, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    sender_type = Column(Enum(MessageSender), nullable=False)
+    content = Column(Text, nullable=False)
+    is_ai_generated = Column(Boolean, default=False, nullable=False)
+    ai_intervention_type = Column(String(100), default=None)
+    metadata_json = Column(JSON, default=None)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    channel = relationship("ChatChannel", back_populates="messages")
 
 
 class ChangeRequest(Base):
@@ -279,11 +280,15 @@ class ChangeRequest(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     requested_by_role = Column(Enum(UserRole), nullable=False)
     description = Column(Text, nullable=False)
-    new_scope = Column(Text, default=None)
-    budget_adjustment = Column(Float, default=None)
-    deadline_adjustment = Column(String(100), default=None)
+    change_type = Column(String(50), nullable=False)  # scope, budget, deadline
+    proposed_changes_json = Column(JSON, nullable=False)
     status = Column(String(50), default="pending", nullable=False, index=True)
+    response_message = Column(Text, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
     responded_at = Column(DateTime, default=None)
+
+    # Relationships
+    job = relationship("Job", back_populates="change_requests")

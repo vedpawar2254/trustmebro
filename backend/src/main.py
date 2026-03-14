@@ -1,15 +1,17 @@
 """FastAPI application for backend API."""
+import secrets
 from datetime import datetime
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr, Field
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 from src.config import settings
 from src.database import get_db
-from src.models import User, Job, JobStatus, UserRole, GigType, Bid, BidStatus
+from src.models import User, UserRole
+from src.schemas import RegisterRequest, LoginRequest, UserResponse, AuthResponse, UserRoleEnum
 from src.auth import (
     verify_password,
     get_password_hash,
@@ -17,84 +19,17 @@ from src.auth import (
     decode_access_token,
 )
 from src.utils.logger import api_logger
-from src.routes import jobs, verify, escrow_submissions, auth, uploads
-from sqlalchemy.orm import Session
+from src.routes import jobs, verify, escrow_submissions, auth, uploads, chat
 
 
-# Set up main logger
 main_logger = api_logger
-
-
-# Request/Response Models
-class RegisterRequest(BaseModel):
-    """Registration request model."""
-
-    name: str = Field(..., min_length=2, max_length=255)
-    email: EmailStr
-    password: str = Field(..., min_length=8, regex=r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$")
-    role: UserRole
-
-
-class LoginRequest(BaseModel):
-    """Login request model."""
-
-    email: EmailStr
-    password: str
-
-
-class UserResponse(BaseModel):
-    """User response model."""
-
-    id: int
-    name: str
-    email: str
-    role: UserRole
-    pfi_score: Optional[float]
-
-
-class AuthResponse(BaseModel):
-    """Authentication response model."""
-
-    success: bool = True
-    token: str
-    user: UserResponse
-
-
-class JobResponse(BaseModel):
-    """Job response model."""
-
-    id: int
-    employer_id: int
-    title: str
-    description: str
-    gig_type: GigType
-    gig_subtype: Optional[str]
-    budget_min: float
-    budget_max: float
-    deadline: datetime
-    status: JobStatus
-    created_at: datetime
-    employer_name: str
-    employer_pfi: Optional[float]
-
-
-class ErrorResponse(BaseModel):
-    """Error response model."""
-
-    success: bool = False
-    error: str
-    code: str = "INTERNAL_ERROR"
-
-
-# Security
-security = HTTPBearer(auto_error=False)
 
 
 # Create FastAPI app
 app = FastAPI(
     title="TrustMeBro Backend API",
     description="Backend API for trustmebro freelance platform",
-    version="0.1.0",
+    version="0.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -115,6 +50,7 @@ app.include_router(jobs.router)
 app.include_router(verify.router)
 app.include_router(escrow_submissions.router)
 app.include_router(uploads.router)
+app.include_router(chat.router)
 
 
 @app.on_event("startup")
@@ -122,13 +58,6 @@ async def startup_event():
     """Run on application startup."""
     main_logger.info("Starting backend API...")
     main_logger.info(f"Server URL: {settings.server_url}")
-
-    # Validate settings
-    try:
-        settings.validate()
-    except ValueError as e:
-        main_logger.error(f"Configuration error: {e}")
-        raise
 
     # Initialize database
     from src.database import init_db
@@ -147,31 +76,22 @@ async def shutdown_event():
 
 
 def get_current_user(request: Request) -> Optional[dict]:
-    """Get current user from JWT token.
-
-    Args:
-        request: FastAPI request
-
-    Returns:
-        User data or None
-    """
+    """Get current user from JWT token."""
     auth_header = request.headers.get("Authorization")
-
     if not auth_header or not auth_header.startswith("Bearer "):
         return None
-
     token = auth_header.split(" ")[1]
-    payload = decode_access_token(token)
+    return decode_access_token(token)
 
-    return payload
 
+# ============== ROOT & HEALTH ==============
 
 @app.get("/")
 async def root():
     """Root endpoint."""
     return {
         "name": "trustmebro Backend API",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "status": "running",
     }
 
@@ -185,83 +105,61 @@ async def health_check():
     }
 
 
+# ============== AUTH ENDPOINTS ==============
+
 @app.post("/auth/register", response_model=AuthResponse)
 async def register(
     register_data: RegisterRequest,
     db: Session = Depends(get_db),
 ):
-    """Register a new user account.
+    """Register a new user account."""
+    main_logger.info(f"Registration attempt: {register_data.email}")
 
-    Args:
-        register_data: Registration data
+    # Check if user exists
+    existing_user = db.query(User).filter(User.email == register_data.email).first()
+    if existing_user:
+        main_logger.warning(f"Registration failed: email already exists {register_data.email}")
+        raise HTTPException(status_code=409, detail="Email already registered. Please login.")
 
-    Returns:
-        AuthResponse with token and user data
-    """
-    try:
-        main_logger.info(f"Registration attempt: {register_data.email}")
+    # Create new user
+    hashed_password = get_password_hash(register_data.password)
+    verification_token = secrets.token_urlsafe(32)
 
-        # Check if user exists
-        existing_user = db.query(User).filter(User.email == register_data.email).first()
-        if existing_user:
-            main_logger.warning(f"Registration failed: email already exists {register_data.email}")
-            raise HTTPException(
-                status_code=409,
-                detail="Email already registered. Please login."
-            )
+    # Set default PFI based on role
+    default_pfi = 100.0 if register_data.role == UserRoleEnum.EMPLOYER else 90.0
 
-        # Create new user
-        hashed_password = get_password_hash(register_data.password)
+    new_user = User(
+        name=register_data.name,
+        email=register_data.email,
+        password_hash=hashed_password,
+        role=UserRole(register_data.role.value),
+        pfi_score=default_pfi,
+        email_verified=False,
+        email_verification_token=verification_token,
+    )
 
-        # Generate email verification token
-        import secrets
-        verification_token = secrets.token_urlsafe(32)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
 
-        new_user = User(
-            name=register_data.name,
-            email=register_data.email,
-            password_hash=hashed_password,
-            role=register_data.role,
-            pfi_score=100.0 if register_data.role == UserRole.EMPLOYER else 90.0,  # Default PFI
-            email_verified=False,
-            email_verification_token=verification_token,
+    # Log verification token for development
+    main_logger.info(f"Verification token for {new_user.email}: {verification_token}")
+
+    # Generate token
+    token = create_access_token({"user_id": new_user.id, "role": new_user.role.value})
+
+    main_logger.info(f"User registered successfully: {new_user.id}")
+
+    return AuthResponse(
+        token=token,
+        user=UserResponse(
+            id=new_user.id,
+            name=new_user.name,
+            email=new_user.email,
+            role=new_user.role.value,
+            pfi_score=new_user.pfi_score,
         )
-
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-
-        # Log verification token for development
-        main_logger.info(f"Verification token for {new_user.email}: {verification_token}")
-        main_logger.info(f"In production, send email to: {new_user.email}")
-        main_logger.info(f"Verification URL: http://localhost:3000/verify-email?token={verification_token}")
-
-        # Generate token
-        token = create_access_token(
-            {"user_id": new_user.id, "role": new_user.role}
-        )
-
-        main_logger.info(f"User registered successfully: {new_user.id}")
-
-        return AuthResponse(
-            token=token,
-            user=UserResponse(
-                id=new_user.id,
-                name=new_user.name,
-                email=new_user.email,
-                role=new_user.role,
-                pfi_score=new_user.pfi_score,
-            )
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        main_logger.error(f"Registration failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Something went wrong. Please try again."
-        )
+    )
 
 
 @app.post("/auth/login", response_model=AuthResponse)
@@ -269,164 +167,81 @@ async def login(
     login_data: LoginRequest,
     db: Session = Depends(get_db),
 ):
-    """Authenticate a user and return JWT token.
+    """Authenticate a user and return JWT token."""
+    main_logger.info(f"Login attempt: {login_data.email}")
 
-    Args:
-        login_data: Login data
+    # Find user
+    user = db.query(User).filter(User.email == login_data.email).first()
+    if not user:
+        main_logger.warning(f"Login failed: user not found {login_data.email}")
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    Returns:
-        AuthResponse with token and user data
-    """
-    try:
-        main_logger.info(f"Login attempt: {login_data.email}")
+    # Verify password
+    if not verify_password(login_data.password, user.password_hash):
+        main_logger.warning(f"Login failed: invalid password {login_data.email}")
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-        # Find user
-        user = db.query(User).filter(User.email == login_data.email).first()
-        if not user:
-            main_logger.warning(f"Login failed: user not found {login_data.email}")
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password."
-            )
+    # Generate token
+    token = create_access_token({"user_id": user.id, "role": user.role.value})
 
-        # Verify password
-        if not verify_password(login_data.password, user.password_hash):
-            main_logger.warning(f"Login failed: invalid password {login_data.email}")
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid email or password."
-            )
+    main_logger.info(f"User logged in successfully: {user.id}")
 
-        # Generate token
-        token = create_access_token(
-            {"user_id": user.id, "role": user.role}
+    return AuthResponse(
+        token=token,
+        user=UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            role=user.role.value,
+            pfi_score=user.pfi_score,
         )
-
-        main_logger.info(f"User logged in successfully: {user.id}")
-
-        return AuthResponse(
-            token=token,
-            user=UserResponse(
-                id=user.id,
-                name=user.name,
-                email=user.email,
-                role=user.role,
-                pfi_score=user.pfi_score,
-            )
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        main_logger.error(f"Login failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Something went wrong. Please try again."
-        )
+    )
 
 
 @app.post("/auth/logout")
-async def logout(
-    request: Request,
-):
-    """Logout user (invalidate token).
-
-    Since JWTs are stateless, logout is implemented client-side
-    by removing the token from storage. This endpoint provides
-    confirmation and could be used for logging/session tracking.
-
-    Args:
-        request: FastAPI request
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException: Not authenticated
-    """
+async def logout(request: Request):
+    """Logout user (invalidate token client-side)."""
     auth_header = request.headers.get("Authorization")
 
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing authentication token"
-        )
+        raise HTTPException(status_code=401, detail="Invalid or missing authentication token")
 
     token = auth_header.split(" ")[1]
     payload = decode_access_token(token)
 
     if not payload:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authentication token"
-        )
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
 
-    try:
-        main_logger.info(f"User logout: user_id={payload.get('user_id')}")
+    main_logger.info(f"User logout: user_id={payload.get('user_id')}")
 
-        # In a production system, you might:
-        # 1. Add token to a blacklist/revocation list
-        # 2. Record logout timestamp in user's session history
-        # 3. Clean up any session data
-
-        return {
-            "success": True,
-            "message": "Logged out successfully"
-        }
-
-    except Exception as e:
-        main_logger.error(f"Logout failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Something went wrong. Please try again."
-        )
+    return {"success": True, "message": "Logged out successfully"}
 
 
 @app.get("/users/me", response_model=UserResponse)
 async def get_me(
+    request: Request,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
 ):
-    """Get current user information.
+    """Get current user information."""
+    current_user = get_current_user(request)
 
-    Args:
-        db: Database session
-        current_user: Current user from JWT
-
-    Returns:
-        UserResponse with user data
-    """
     if not current_user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing authentication token"
-        )
+        raise HTTPException(status_code=401, detail="Invalid or missing authentication token")
 
-    try:
-        user = db.query(User).filter(User.id == current_user["user_id"]).first()
-        if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
+    user = db.query(User).filter(User.id == current_user["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        return UserResponse(
-            id=user.id,
-            name=user.name,
-            email=user.email,
-            role=user.role,
-            pfi_score=user.pfi_score,
-        )
+    return UserResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        role=user.role.value,
+        pfi_score=user.pfi_score,
+    )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        main_logger.error(f"Get user failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to fetch user information"
-        )
 
+# ============== EXCEPTION HANDLERS ==============
 
 @app.exception_handler(ValueError)
 async def validation_error_handler(request: Request, exc: ValueError) -> JSONResponse:
@@ -460,5 +275,4 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host=settings.host, port=settings.port, log_level=settings.log_level.lower())
