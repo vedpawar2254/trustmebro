@@ -1,21 +1,23 @@
 'use client';
 
-import { VerificationReport, VerificationStatus, GigType } from '@/types';
+import { VerificationReport, CriterionStatus, GigType } from '@/types';
 
 interface VerificationReportCardProps {
   report: VerificationReport;
 }
 
-const verificationStatusIcons: Record<VerificationStatus, string>> = {
+const verificationStatusIcons: Record<CriterionStatus, string> = {
   PASS: 'check-circle',
-  'PARTIAL: 'alert-circle',
-  'FAIL': 'x-circle',
+  PARTIAL: 'alert-circle',
+  FAIL: 'x-circle',
+  PENDING: 'clock',
 };
 
-const verificationStatusColors: Record<VerificationStatus, string>> = {
+const verificationStatusColors: Record<CriterionStatus, string> = {
   PASS: 'text-green-600',
   PARTIAL: 'text-amber-500',
   FAIL: 'text-red-600',
+  PENDING: 'text-gray-500',
 };
 
 const paymentDecisionConfig = {
@@ -36,12 +38,6 @@ const paymentDecisionConfig = {
   },
 };
 
-const paymentDecisionColors = {
-  AUTO_RELEASE: paymentDecisionConfig.AUTO_RELEASE,
-  HOLD: paymentDecisionConfig.HOLD,
-  DISPUTE: paymentDecisionConfig.DISPUTE,
-};
-
 export function VerificationReportCard({ report }: VerificationReportCardProps) {
   const paymentConfig = paymentDecisionConfig[report.payment_decision];
 
@@ -51,12 +47,10 @@ export function VerificationReportCard({ report }: VerificationReportCardProps) 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div>
-              {verificationStatusIcons[report.payment_decision]}
-            </div>
-            <div className={`text-lg font-bold ${paymentConfig.color}`}>
-              {paymentConfig.label}
-              {' '}
               {paymentConfig.icon}
+            </div>
+            <div className={`text-lg font-bold ${paymentConfig.color} px-2 py-1 rounded`}>
+              {paymentConfig.label}
             </div>
           </div>
         </div>
@@ -71,33 +65,31 @@ export function VerificationReportCard({ report }: VerificationReportCardProps) 
           </p>
         </div>
 
-        <div className="border-t border-gray-100 rounded-b mt-6">
+        <div className="border-t border-gray-100 rounded-b mt-6 pt-6">
           <h4 className="text-lg font-semibold text-gray-900 mb-4">
             Verification Criteria
           </h4>
           <div className="space-y-4">
             {report.criteria.map((criterion, idx) => (
-              <div
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0">
-                    {verificationStatusIcons[criterion.status]}
-                  </div>
-                  <div className="flex-1">
-                    <p className={`font-medium ${verificationStatusColors[criterion.status]}`}>
-                      {criterion.name}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {criterion.detail}
-                    </p>
-                  </div>
+              <div key={idx} className="flex items-start gap-3">
+                <div className="flex-shrink-0 text-xl">
+                  {criterion.status === 'PASS' ? '✅' : criterion.status === 'FAIL' ? '❌' : criterion.status === 'PARTIAL' ? '⚠️' : '⏳'}
                 </div>
+                <div className="flex-1">
+                  <p className={`font-medium ${verificationStatusColors[criterion.status]}`}>
+                    {criterion.name}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {criterion.detail}
+                  </p>
                 </div>
+              </div>
             ))}
           </div>
         </div>
 
-        {report.pfi_signals.length > 0 && (
-          <div className="bg-yellow-50 text-yellow-900 border-t border-yellow-200 rounded-b p-4 mb-6">
+        {report.pfi_signals && report.pfi_signals.length > 0 && (
+          <div className="bg-yellow-50 text-yellow-900 border border-yellow-200 rounded-lg p-4 mt-6">
             <h4 className="text-lg font-semibold text-yellow-900 mb-4">
               PFI Signals (Quality Indicators)
             </h4>
@@ -119,10 +111,11 @@ export function VerificationReportCard({ report }: VerificationReportCardProps) 
         )}
 
         {report.resubmissions_remaining > 0 && (
-          <div className="bg-blue-50 text-blue-800 border-t border-blue-200 rounded-b p-4 mb-6">
+          <div className="bg-blue-50 text-blue-800 border-t border-blue-200 rounded-b p-4 mt-6">
             <div className="flex items-center gap-2 text-blue-700">
               <span>Resubmissions remaining: {report.resubmissions_remaining}</span>
             </div>
+          </div>
         )}
       </div>
     </div>

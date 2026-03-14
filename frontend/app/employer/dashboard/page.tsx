@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore, selectUserRole, selectUser } from '@/store/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MeterRing } from '@/components/ui/meter-ring';
 
 export default function EmployerDashboard() {
   const router = useRouter();
@@ -33,43 +34,26 @@ export default function EmployerDashboard() {
         </Link>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Jobs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary">3</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Spent</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-foreground">$4,250</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Pending Bids</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-warning">7</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>In Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-info">3</div>
-          </CardContent>
-        </Card>
+      {/* Stats / Overview Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <MeterRing
+          label="Active Projects"
+          value={2}
+          description="projects running"
+          progress={66}
+        />
+        <MeterRing
+          label="Pending Bids"
+          value={5}
+          description="waiting for review"
+          progress={40}
+        />
+        <MeterRing
+          label="Escrow Locked"
+          value="$1200"
+          description="total in escrow"
+          progress={80}
+        />
       </div>
 
       {/* Recent Activity */}

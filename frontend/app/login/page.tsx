@@ -123,11 +123,11 @@ export default function LoginPage() {
           {/* SOCIAL LOGIN */}
           <div className="grid grid-cols-2 gap-4 max-w-md">
 
-            <Button variant="outline" className="w-full border-white/20 text-white border">
+            <Button variant="secondary" className="w-full border-white/20 text-white border">
               Google
             </Button>
 
-            <Button variant="outline" className="w-full border-white/20 text-white border">
+            <Button variant="secondary" className="w-full border-white/20 text-white border">
               Apple
             </Button>
 
